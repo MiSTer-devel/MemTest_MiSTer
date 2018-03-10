@@ -51,6 +51,7 @@ module spdif
 (
     input        clk_i,
     input        rst_i,
+    input        half_rate,
 
     // Output
     output       spdif_o,
@@ -61,70 +62,83 @@ module spdif
     output       sample_req_o
 );
 
-//-----------------------------------------------------------------
-// External clock source
-//-----------------------------------------------------------------
-wire    bit_clock_w;
-reg [31:0]  count_q;
-reg [31:0]  error_q;
+reg lpf_ce;
+always @(negedge clk_i) begin
+	reg [3:0] div;
+
+	div <= div + 1'd1;
+	if(div == 13) div <= 0;
+
+	lpf_ce <= !div;
+end
+
+wire [15:0] al, ar;
+
+lpf48k #(15) lpf_l
+(
+   .RESET(rst_i),
+   .CLK(clk_i),
+   .CE(lpf_ce),
+	.ENABLE(1),
+
+   .IDATA(audio_l),
+   .ODATA(al)
+);
+
+lpf48k #(15) lpf_r
+(
+   .RESET(rst_i),
+   .CLK(clk_i),
+   .CE(lpf_ce),
+	.ENABLE(1),
+
+   .IDATA(audio_r),
+   .ODATA(ar)
+);
+
 reg         bit_clk_q;
 
 // Clock pulse generator
-always @ (posedge rst_i or posedge clk_i)
-begin
-	 if (rst_i)
-	 begin
-			count_q     <= 32'd0;
-			error_q     <= 32'd0;
-			bit_clk_q   <= 1'b1;
-	 end
-	 else
-	 begin
-			case (count_q)
-			0 :
-			begin
-				 bit_clk_q   <= 1'b1;
-				 count_q     <= count_q + 32'd1;
-			end
+always @ (posedge rst_i or posedge clk_i) begin
+	reg [31:0]  count_q;
+	reg [31:0]  error_q;
+	reg ce;
 
-			WHOLE_CYCLES-1:
-			begin
-				 if (error_q < (ERROR_BASE - ERRORS_PER_BIT))
-				 begin
-					  error_q <= error_q + ERRORS_PER_BIT[31:0];
-					  count_q <= 32'd0;
-				 end
-				 else
-				 begin
-					  error_q <= error_q + ERRORS_PER_BIT[31:0] - ERROR_BASE;
-					  count_q <= count_q + 32'd1;
-				 end
-
-				 bit_clk_q   <= 1'b0;
+	if (rst_i) begin
+		count_q   <= 0;
+		error_q   <= 0;
+		bit_clk_q <= 1;
+		ce        <= 0;
+	end
+	else
+	begin
+		if(count_q == WHOLE_CYCLES-1) begin
+			if (error_q < (ERROR_BASE - ERRORS_PER_BIT)) begin
+				error_q <= error_q + ERRORS_PER_BIT[31:0];
+				count_q <= 0;
+			end else begin
+				error_q <= error_q + ERRORS_PER_BIT[31:0] - ERROR_BASE;
+				count_q <= count_q + 1;
 			end
+		end else if(count_q == WHOLE_CYCLES) begin
+			count_q <= 0;
+		end else begin
+			count_q <= count_q + 1;
+		end
 
-			WHOLE_CYCLES:
-			begin
-				 count_q     <= 32'd0;
-				 bit_clk_q   <= 1'b0;
-			end
-
-			default:
-			begin
-				 count_q     <= count_q + 32'd1;
-				 bit_clk_q   <= 1'b0;
-			end
-			endcase
-	 end
+		bit_clk_q <= 0;
+		if(!count_q) begin
+			ce <= ~ce;
+			if(~half_rate || ce) bit_clk_q <= 1;
+		end
+	end
 end
-
-assign bit_clock_w = bit_clk_q;
 
 //-----------------------------------------------------------------
 // Core SPDIF
 //-----------------------------------------------------------------
 
-wire [31:0] sample_i = {audio_r, audio_l};
+wire [31:0] sample_i = {ar, al};
 
 spdif_core
 u_core
@@ -132,7 +146,7 @@ u_core
     .clk_i(clk_i),
     .rst_i(rst_i),
 
-    .bit_out_en_i(bit_clock_w),
+    .bit_out_en_i(bit_clk_q),
 
     .spdif_o(spdif_o),
 

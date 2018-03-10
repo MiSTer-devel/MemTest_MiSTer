@@ -31,5 +31,8 @@ del /s *.bsf
 del /s *.f
 del /s *.sopcinfo
 del /s *.xml
-del *_netlist
+del *.cdf
+del *.rpt
+del /s new_rtl_netlist
+del /s old_rtl_netlist
 pause

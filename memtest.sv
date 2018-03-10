@@ -8,7 +8,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [37:0] HPS_BUS,
+	inout  [44:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -30,7 +30,7 @@ module emu
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
-	// b[1]: 0 - LED status is system status ORed with b[0]
+	// b[1]: 0 - LED status is system status OR'd with b[0]
 	//       1 - LED status is controled solely by b[0]
 	// hint: supply 2'b00 to let the system control the LED.
 	output  [1:0] LED_POWER,
@@ -38,8 +38,16 @@ module emu
 
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
-	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
+	output        AUDIO_S,   // 1 - signed audio samples, 0 - unsigned
+	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
 	input         TAPE_IN,
+
+	// SD-SPI
+	output        SD_SCK,
+	output        SD_MOSI,
+	input         SD_MISO,
+	output        SD_CS,
+	input         SD_CD,
 
 	//High latency DDR3 RAM interface
 	//Use for non-critical time purposes
@@ -68,7 +76,8 @@ module emu
 	output        SDRAM_nWE
 );
 
-assign {DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE, DDRAM_CLK} = 0;
+assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = 0;
+assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
 assign VIDEO_ARX = 16;
 assign VIDEO_ARY = 9;
@@ -76,6 +85,7 @@ assign VIDEO_ARY = 9;
 assign AUDIO_S = 0;
 assign AUDIO_L = 0;
 assign AUDIO_R = 0;
+assign AUDIO_MIX = 0;
 
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
