@@ -91,69 +91,310 @@ assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign LED_USER  = 0;
 
+wire [31:0] status;
+wire  [1:0] buttons;
+
+`include "build_id.v" 
 localparam CONF_STR = 
 {
-	"MEMTEST;;"
+	"MEMTEST;;",
+	"V,v2.00.",`BUILD_DATE
 };
 
+reg [10:0] ps2_key;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
-	.clk_sys(clk),
+	.clk_sys(CLK_50M),
 	.HPS_BUS(HPS_BUS),
 
 	.conf_str(CONF_STR),
+	.status(status),
+	.buttons(buttons),
 
+	.ps2_key(ps2_key),
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0)
 );
 
 
-////////////////////   CLOCKS   ///////////////////
-wire clk, videoclk, locked;
+///////////////////////////////////////////////////////////////////
+wire clk_ram, locked;
 
 pll pll
 (
+	.*,
 	.refclk(CLK_50M),
-	.rst(0),
-	.outclk_0(clk),
-	.outclk_1(SDRAM_CLK),
-	.outclk_2(videoclk),
-	.locked(locked)
+	.rst(pll_reset | RESET),
+	.outclk_0(clk_ram),
+	.outclk_1(SDRAM_CLK)
 );
 
-assign CLK_VIDEO = videoclk;
-assign CE_PIXEL  = 1;
+wire        mgmt_waitrequest;
+reg         mgmt_write;
+reg  [5:0]  mgmt_address;
+reg  [31:0] mgmt_writedata;
+wire [63:0] reconfig_to_pll;
+wire [63:0] reconfig_from_pll;
 
-parameter DRAM_COL_SIZE = 9;
-parameter DRAM_ROW_SIZE = 13;
-
-
-assign SDRAM_CKE = ~RESET;
-
-wire rst_n;
-defparam my_reset.RST_CNT_SIZE = 16;
-resetter my_reset
+pll_hdmi_cfg pll_cfg
 (
-	.clk(clk),
-	.rst_in_n( ~RESET & locked ),
-	.rst_out_n(rst_n)
+	.*,
+	.mgmt_clk(CLK_50M),
+	.mgmt_reset(RESET),
+	.mgmt_read(0),
+	.mgmt_readdata()
 );
 
+reg recfg = 0;
+reg pll_reset = 0;
+
+// Phases here are empirically adjusted based on 167MHz synthesized core 
+// so arn't reliable for fixed frequency cores.
+wire [31:0] cfg_param[44] =
+'{ //          M         K          C    Ph
+	/*167*/ 'h00808, 'hB33332DD, 'h20302, 29,
+	/*160*/ 'h00808, 'h00000001, 'h20302, 28,
+	/*150*/ 'h20807, 'h00000001, 'h20302, 27,
+	/*140*/ 'h00707, 'h00000001, 'h20302, 20,
+	/*130*/ 'h00505, 'h66666611, 'h00202, 26,
+	/*120*/ 'h00707, 'h66666611, 'h00303, 17,
+	/*110*/ 'h20706, 'h333332DD, 'h00303, 17,
+	/*100*/ 'h00404, 'h00000001, 'h00202, 14,
+	/* 90*/ 'h00707, 'h66666666, 'h00404, 16,
+	/* 80*/ 'h00707, 'h66666666, 'h20504, 8,
+	/* 70*/ 'h00707, 'h00000001, 'h00505, 0
+};
+
+wire [11:0] freq[11] = '{12'h167, 12'h160, 12'h150, 12'h140, 12'h130, 12'h120, 12'h110, 12'h100, 12'h90, 12'h80, 12'h70};
+reg   [3:0] pos  = 0;
+reg  [15:0] mins = 0;
+reg  [15:0] secs = 0;
+reg         auto = 0;
+
+reg			ph_shift = 0;
+reg  [31:0] pre_phase;
+
+always @(posedge CLK_50M) begin
+	reg  [7:0] state = 0;
+	reg        old_wait;
+	reg [31:0] phase;
+	integer    min = 0, sec = 0;
+	reg        old_stb = 0;
+	reg        shift = 0;
+
+	mgmt_write <= 0;
+
+	if(((locked && !mgmt_waitrequest) || pll_reset) && recfg) begin
+		state <= state + 1'd1;
+		if(!state[2:0]) begin
+			case(state[7:3])
+				// Start
+				0: begin
+						mgmt_address   <= 0;
+						mgmt_writedata <= 0;
+						mgmt_write     <= 1;
+						if(!ph_shift)  pre_phase <= cfg_param[{pos, 2'd3}];
+					end
+
+				// M
+				1: begin
+						mgmt_address   <= 4;
+						mgmt_writedata <= cfg_param[{pos, 2'd0}];
+						mgmt_write     <= 1;
+					end
+
+				// K
+				2: begin
+						mgmt_address   <= 7;
+						mgmt_writedata <= cfg_param[{pos, 2'd1}];
+						mgmt_write     <= 1;
+					end
+
+				// N
+				3: begin
+						mgmt_address   <= 3;
+						mgmt_writedata <= 'h10000;
+						mgmt_write     <= 1;
+					end
+
+				// C0
+				4: begin
+						mgmt_address   <= 5;
+						mgmt_writedata <= cfg_param[{pos, 2'd2}];
+						mgmt_write     <= 1;
+					end
+
+				// C1
+				5: begin
+						mgmt_address   <= 5;
+						mgmt_writedata <= cfg_param[{pos, 2'd2}] | 'h40000;
+						mgmt_write     <= 1;
+					end
+
+				// Charge pump
+				6: begin
+						mgmt_address   <= 9;
+						mgmt_writedata <= 1;
+						mgmt_write     <= 1;
+					end
+
+				// Bandwidth
+				7: begin
+						mgmt_address   <= 8;
+						mgmt_writedata <= 7;
+						mgmt_write     <= 1;
+					end
+
+				// Apply
+				8: begin
+						mgmt_address   <= 2;
+						mgmt_writedata <= 0;
+						mgmt_write     <= 1;
+					end
+
+				9:  pll_reset <= 1;
+				10: pll_reset <= 0;
+
+				// Start
+				11: begin
+						mgmt_address   <= 0;
+						mgmt_writedata <= 0;
+						mgmt_write     <= 1;
+						
+						if(pre_phase > cfg_param[3]) phase <= pre_phase - cfg_param[3];
+						else
+						if(pre_phase < cfg_param[3]) phase <= (cfg_param[3] - pre_phase) | 'h200000;
+						else
+						begin
+							// no change. finish.
+							mgmt_write  <= 0;
+							recfg <= 0;
+						end
+					end
+
+				// Phase
+				12: begin
+						mgmt_address   <= 6;
+						mgmt_writedata <= phase | 'h10000;
+						mgmt_write     <= 1;
+					end
+
+				// Apply
+				13: begin
+						mgmt_address   <= 2;
+						mgmt_writedata <= 0;
+						mgmt_write     <= 1;
+					end
+
+				14: recfg <= 0;
+			endcase
+		end
+	end
+
+	if(recfg) begin
+		{min, mins} <= 0;
+		{sec, secs} <= 0;
+	end else begin
+		min <= min + 1;
+		if(min == 2999999999) begin
+			min <= 0;
+			if(mins[3:0]<9) mins[3:0] <= mins[3:0] + 1'd1;
+			else begin
+				mins[3:0] <= 0;
+				if(mins[7:4]<9) mins[7:4] <= mins[7:4] + 1'd1;
+				else begin
+					mins[7:4] <= 0;
+					if(mins[11:8]<9) mins[11:8] <= mins[11:8] + 1'd1;
+					else begin
+						mins[11:8] <= 0;
+						if(mins[15:12]<9) mins[15:12] <= mins[15:12] + 1'd1;
+						else mins[15:12] <= 0;
+					end
+				end
+			end
+		end
+		sec <= sec + 1;
+		if(sec == 4999999) begin
+			sec <= 0;
+			secs <= secs + 1'd1;
+		end
+	end
+
+	old_stb <= ps2_key[10];
+	if(old_stb != ps2_key[10]) begin
+		state <= 0;
+		if(ps2_key[9]) begin
+			if(ps2_key[7:0] == 'h75 && pos > 0) begin
+				recfg <= 1;
+				pos <= pos - 1'd1;
+				auto <= 0;
+				ph_shift <= 0;
+			end
+			if(ps2_key[7:0] == 'h72 && pos < 10) begin
+				recfg <= 1;
+				pos <= pos + 1'd1;
+				auto <= 0;
+				ph_shift <= 0;
+			end
+			if(ps2_key[7:0] == 'h5a) begin
+				recfg <= 1;
+				auto <= 0;
+				ph_shift <= shift;
+			end
+			if(ps2_key[7:0] == 'h1c) begin
+				recfg <= 1;
+				pos <= 0;
+				auto <= 1;
+				ph_shift <= 0;
+			end
+			if(ps2_key[7:0] == 'h74 && shift && pre_phase < 100) begin
+				recfg <= 1;
+				pre_phase <= pre_phase + 1'd1;
+				auto <= 0;
+				ph_shift <= 1;
+			end
+			if(ps2_key[7:0] == 'h6B && shift && pre_phase > 0) begin
+				recfg <= 1;
+				pre_phase <= pre_phase - 1'd1;
+				auto <= 0;
+				ph_shift <= 1;
+			end
+		end
+
+		if(ps2_key[7:0] == 'h12) shift <= ps2_key[9];
+	end
+
+	if(auto && failcount && !recfg && pos < 10) begin
+		recfg <= 1;
+		pos <= pos + 1'd1;
+		ph_shift <= 0;
+	end
+end
+
+
+///////////////////////////////////////////////////////////////////
+assign SDRAM_CKE = 1;
+
+reg reset = 0;
+always @(posedge clk_ram) begin
+	integer timeout;
+
+	if(timeout) timeout <= timeout - 1;
+	reset <= |timeout;
+
+	if(RESET || status[0] || buttons[1] || recfg || ~locked) timeout <= 1000000;
+end
 
 wire [31:0] passcount, failcount;
-wire [3:0] mmtst_state;
-wire [5:0] sdram_state;
-defparam my_memtst.DRAM_COL_SIZE = DRAM_COL_SIZE;
-defparam my_memtst.DRAM_ROW_SIZE = DRAM_ROW_SIZE;
+defparam my_memtst.DRAM_COL_SIZE = 9;
+defparam my_memtst.DRAM_ROW_SIZE = 13;
 mem_tester my_memtst
 (
-	.clk(clk),
-	.rst_n(rst_n),
+	.clk(clk_ram),
+	.rst_n(~reset),
 	.passcount(passcount),
 	.failcount(failcount),
-	.mmtst_state(mmtst_state),
-	.sdram_state(sdram_state),
 	.DRAM_DQ(SDRAM_DQ),
 	.DRAM_ADDR(SDRAM_A),
 	.DRAM_LDQM(SDRAM_DQML),
@@ -167,6 +408,19 @@ mem_tester my_memtst
 );
 
 
+///////////////////////////////////////////////////////////////////
+wire videoclk;
+
+vpll vpll
+(
+	.refclk(CLK_50M),
+	.rst(0),
+	.outclk_0(videoclk)
+);
+
+assign CLK_VIDEO = videoclk;
+assign CE_PIXEL  = 1;
+
 wire hs, vs;
 wire [1:0] b, r, g;
 vgaout showrez
@@ -174,8 +428,9 @@ vgaout showrez
 	.clk(videoclk),
 	.rez1(passcount),
 	.rez2(failcount),
-	.rez3({2'b00,mmtst_state}),
-	.rez4(sdram_state),
+	.freq(16'hF000 | freq[pos]),
+	.elapsed(ph_shift ? pre_phase[15:0] : mins),
+	.mark(ph_shift ? 8'hF0 : auto ? 8'h80 >> secs[3:0] : 8'd0),
 	.hs(hs),
 	.vs(vs),
 	.de(VGA_DE),

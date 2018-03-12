@@ -1,69 +1,69 @@
 // input clock: 14MHz
 // output format: 31460 x 70 Hz (like 720x400@70)
 
-module vgaout(
- input clk,
+module vgaout
+(
+	input clk,
 
- input [31:0] rez1,
- input [31:0] rez2,
- input [5:0] rez3,
- input [5:0] rez4,
+	input [31:0] rez1,
+	input [31:0] rez2,
 
- output reg hs,
- output reg vs,
- output reg de,
- output reg [1:0] b,
- output reg [1:0] r,
- output reg [1:0] g
+	input [15:0] freq,
+	input [15:0] elapsed,
+	input  [7:0] mark,
+
+	output reg hs,
+	output reg vs,
+	output reg de,
+	output reg [1:0] b,
+	output reg [1:0] r,
+	output reg [1:0] g
 );
 
-/*
-parameter H_TOTAL = 12'd858;
-parameter H_FP = 12'd16;
-parameter H_SYNC = 12'd62;
-parameter H_BP = 12'd60;
-*/
+localparam HSYNC_BEG   = 12'd0;
+localparam HSYNC_END   = 12'd62;
+localparam HSCRN_BEG   = 12'd128;
+localparam HREZ        = 12'd240;
+localparam HSCRN_END   = 12'd848;
+localparam HMAX        = 12'd858;
 
- localparam HSYNC_BEG   = 12'd0;
- localparam HSYNC_END   = 12'd62;
- localparam HSCRN_BEG   = 12'd78;
- localparam HREZ        = 12'd200;
- localparam HSCRN_END   = 12'd798;
- localparam HMAX        = 12'd858; // 890;
+localparam VSYNC_BEG   = 12'd0;
+localparam VSYNC_END   = 12'd6;
+localparam VSCRN_BEG   = 12'd30;
+localparam VREZ4       = 12'd96;
+localparam VREZ3       = 12'd112;
+localparam VREZ1       = 12'd240;
+localparam VREZ2       = 12'd368;
+localparam VSCRN_END   = 12'd510;
+localparam VMAX        = 12'd525;
 
-/*
-parameter V_TOTAL_0 = 12'd525;
-parameter V_FP_0 = 12'd9;
-parameter V_SYNC_0 = 12'd6;
-parameter V_BP_0 = 12'd30;
-*/
- localparam VSYNC_BEG   = 12'd0;
- localparam VSYNC_END   = 12'd6;
- localparam VSCRN_BEG   = 12'd15;
- localparam VREZ1       = 12'd128;
- localparam VREZ3       = 12'd54; // 9'd216;
- localparam VREZ4       = 12'd59; // 9'd236;
- localparam VREZ2       = 12'd256;
- localparam VSCRN_END   = 12'd495;
- localparam VMAX        = 12'd525;
+reg [11:0] hcount, vcount;
+reg hscr, vscr, nextline;
+reg [31:0] r1, r2, r3;
+reg [7:0] r4;
 
- reg [11:0] hcount, vcount;
- reg hscr, vscr, nextline;
- reg [31:0] r1, r2;
+reg [5:0] xr;
+reg [3:0] yr;
 
- reg [5:0] xr;          initial xr=6'h3f;
- reg [3:0] yr;          initial yr=4'hf;
+wire [3:0] rn;
+wire rezpix;
 
- reg [5:0] rrc;         initial rrc=6'h3f;
- wire r34pix;
- assign r34pix = ( ( (vcount[8:2]==VREZ3) || (vcount[8:2]==VREZ4) ) && (rrc==xr) );
+assign rn = (vcount>=VREZ2) ? r2[31:28] : (vcount>=VREZ1) ? r1[31:28] : r3[31:28];
 
- wire [3:0] rn;
- wire rezpix;
+wire pix = (vcount<VREZ3) ? mpix : rezpix;
+wire [5:0] pixcolor = (vcount>=VREZ2) ? 6'b001100 : (vcount>=VREZ1) ? 6'b110000 : (vcount>=VREZ3) ? 6'b111100 : 6'b110011;
 
- assign rn = (vcount[8]) ? r2[31:28] : r1[31:28];
+hexnum digs
+(
+	.value(rn),
+	.x({xr[2],xr[1]|xr[0]}),
+	.y({yr[3:2],yr[1]|yr[0]}),
+	.hide(vcount<VREZ1 && xr[5:3]==4),
 
- hexnum digs( .value(rn), .x({xr[2],xr[1]|xr[0]}), .y({yr[3:2],yr[1]|yr[0]}), .image(rezpix) );
+	.image(rezpix)
+);
+
+wire mpix = ({xr[2],xr[1]|xr[0]} <= 2) && ((vcount>>3) == (VREZ4>>3)) && r4[7];
 
 always @(posedge clk) begin
 
@@ -93,16 +93,16 @@ always @(posedge clk) begin
 		xr <= 6'd0;
 		r1 <= rez1;
 		r2 <= rez2;
-		if (vcount[11:2]==VREZ3)
-			rrc <= rez3;
-		else if (vcount[11:2]==VREZ4)
-			rrc <= rez4;
+		r3 <= {elapsed, freq};
+		r4 <= mark;
 	end
 	else if ( (!hcount[2:0]) && (xr!=6'h3f) ) begin
 		xr <= xr + 6'd1;
 		if (xr[2:0]==3'd7) begin
 			r1[31:4] <= r1[27:0];
 			r2[31:4] <= r2[27:0];
+			r3[31:4] <= r3[27:0];
+			r4[7:1]  <= r4[6:0];
 		end
 	end
 
@@ -122,20 +122,15 @@ always @(posedge clk) begin
 		else if (vcount==VSYNC_END)
 			vs <= 1'b0;
 
-		if ( (vcount==VREZ1) || (vcount==VREZ2) )
+		if ( (vcount==VREZ1) || (vcount==VREZ2) || (vcount==VREZ3))
 			yr <= 4'd0;
 		else if ( (vcount[2:0]==3'b000) && (yr!=4'hf) )
 			yr <= yr + 4'd1;
 
 	end
 
-	{g,r,b} <= (r34pix) ? 6'b101010 :
-             (
-              (rezpix) ?
-              ( (vcount[8]) ? 6'b001100 : 6'b110000 )
-              :
-              ( (hscr&vscr) ? 6'b000001 : 6'b000000 )
-             );
+	{g,r,b} <= pix ? pixcolor : (hscr&vscr) ? 6'b000001 : 6'b000000;
+
 end
 
 endmodule
@@ -144,17 +139,20 @@ endmodule
 
 module hexnum
 (
-	input wire [3:0] value,
-	input wire [1:0] x,
-	input wire [2:0] y,
+	input  [3:0] value,
+	input  [1:0] x,
+	input  [2:0] y,
+	input        hide,
 
-	output wire image
+	output image
 );
 
 reg [6:0] ss;
 reg i;
 
 always @(*) begin
+	if(hide) ss <= 7'b0000000;
+	else
 	case (value)  //gfedcba
 	4'h0: ss <= 7'b0111111;
 	4'h1: ss <= 7'b0000110;

@@ -415,8 +415,8 @@ always@(posedge clk_sys) begin
 									9: io_dout <= vid_vtime[31:16];
 								  10: io_dout <= vid_pix[15:0];
 								  11: io_dout <= vid_pix[31:16];
-								  //12: io_dout <= vid_vtime_hdmi[15:0];
-								  //13: io_dout <= vid_vtime_hdmi[31:16];
+								  12: io_dout <= vid_vtime_hdmi[15:0];
+								  13: io_dout <= vid_vtime_hdmi[31:16];
 								endcase
 						end
 

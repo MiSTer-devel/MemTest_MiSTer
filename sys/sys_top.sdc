@@ -7,7 +7,7 @@ create_clock -period "100.0 MHz" [get_pins -compatibility_mode *|h2f_user0_clk]
 derive_pll_clocks
 
 # Specify PLL-generated clock(s)
-create_generated_clock -source [get_pins -compatibility_mode {*|pll|pll_inst|altera_pll_i|general[1].gpll~PLL_OUTPUT_COUNTER|divclk}] \
+create_generated_clock -source [get_pins -compatibility_mode {*|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}] \
                        -name SDRAM_CLK [get_ports {SDRAM_CLK}]
 
 create_generated_clock -source [get_pins -compatibility_mode {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}] \
@@ -33,7 +33,8 @@ set_output_delay -min -clock SDRAM_CLK -0.9ns [get_ports {SDRAM_D* SDRAM_A* SDRA
 
 # Decouple different clock groups (to simplify routing)
 set_clock_groups -asynchronous \
-   -group [get_clocks { *|pll|pll_inst|altera_pll_i|general[*].gpll~PLL_OUTPUT_COUNTER|divclk}] \
+   -group [get_clocks { *|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[*].output_counter|divclk}] \
+	-group [get_clocks { *|vpll|vpll_inst|altera_pll_i|general[*].gpll~PLL_OUTPUT_COUNTER|divclk}] \
    -group [get_clocks { pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk VID_CLK}] \
    -group [get_clocks { *|h2f_user0_clk}] \
    -group [get_clocks { FPGA_CLK1_50 FPGA_CLK2_50 FPGA_CLK3_50}]
