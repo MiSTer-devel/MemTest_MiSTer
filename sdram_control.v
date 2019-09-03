@@ -330,6 +330,7 @@ always @(posedge clk,negedge rst_n) begin
 				dcsn <= 1'b0;
 				dcmd <= cmdNOP;
 				dqm <= 1'b1;
+				da[12:11] <= 2'b11;
 				ctr_init <= 1'b1; // begin counting
 				ready <= 1'b0;
 			end

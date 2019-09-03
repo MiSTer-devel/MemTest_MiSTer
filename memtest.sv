@@ -1,3 +1,24 @@
+//============================================================================
+//
+//  Memory testes for MiSTer.
+//  Copyright (C) 2017-2019 Sorgelig
+//
+//
+//  This program is free software; you can redistribute it and/or modify it
+//  under the terms of the GNU General Public License as published by the Free
+//  Software Foundation; either version 2 of the License, or (at your option)
+//  any later version.
+//
+//  This program is distributed in the hope that it will be useful, but WITHOUT
+//  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+//  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+//  more details.
+//
+//  You should have received a copy of the GNU General Public License along
+//  with this program; if not, write to the Free Software Foundation, Inc.,
+//  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+//============================================================================
+
 module emu
 (
 	//Master input clock
@@ -8,7 +29,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [44:0] HPS_BUS,
+	inout  [45:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -27,6 +48,8 @@ module emu
 	output        VGA_HS,
 	output        VGA_VS,
 	output        VGA_DE,    // = ~(VBlank | HBlank)
+	output        VGA_F1,
+	output [1:0]  VGA_SL,
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -40,7 +63,9 @@ module emu
 	output [15:0] AUDIO_R,
 	output        AUDIO_S,   // 1 - signed audio samples, 0 - unsigned
 	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
-	input         TAPE_IN,
+
+	//ADC
+	inout   [3:0] ADC_BUS,
 
 	// SD-SPI
 	output        SD_SCK,
@@ -73,12 +98,34 @@ module emu
 	output        SDRAM_nCS,
 	output        SDRAM_nCAS,
 	output        SDRAM_nRAS,
-	output        SDRAM_nWE
+	output        SDRAM_nWE,
+
+	input         UART_CTS,
+	output        UART_RTS,
+	input         UART_RXD,
+	output        UART_TXD,
+	output        UART_DTR,
+	input         UART_DSR,
+
+	// Open-drain User port.
+	// 0 - D+/RX
+	// 1 - D-/TX
+	// 2..5 - USR1..USR4
+	// Set USER_OUT to 1 to read from USER_IN.
+	input   [5:0] USER_IN,
+	output  [5:0] USER_OUT,
+
+	input         OSD_STATUS
 );
 
-assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = 0;
+assign ADC_BUS  = 'Z;
+assign USER_OUT = '1;
+assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
+assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = 0;
 
+assign VGA_SL = 0;
+assign VGA_F1 = 0;
 assign VIDEO_ARX = 16;
 assign VIDEO_ARY = 9;
 
@@ -98,7 +145,7 @@ wire  [1:0] buttons;
 localparam CONF_STR = 
 {
 	"MEMTEST;;",
-	"V,v2.00.",`BUILD_DATE
+	"V,v",`BUILD_DATE
 };
 
 reg [10:0] ps2_key;
@@ -137,7 +184,7 @@ reg  [31:0] mgmt_writedata;
 wire [63:0] reconfig_to_pll;
 wire [63:0] reconfig_from_pll;
 
-pll_hdmi_cfg pll_cfg
+pll_cfg pll_cfg
 (
 	.*,
 	.mgmt_clk(CLK_50M),
