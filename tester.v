@@ -8,11 +8,10 @@ error...
 
 module tester
 (
-	input clk,
-	input rst_n,
+	input         clk,
+	input         rst_n,
 
-	input sz32mb,
-	input chip,
+	input  [1:0]  sz,
 
 	output reg [31:0] passcount,
 	output reg [31:0] failcount,
@@ -52,8 +51,7 @@ sdram my_dram
 (
 	.rst_n(sdram_rst_n),
 	.clk(clk),
-	.sz32mb(sz32mb),
-	.chip(sdram_chip),
+	.sz(sz),
 	.start(dram_start),
 	.rnw(dram_rnw),
 	.done(dram_done),
@@ -136,7 +134,6 @@ end
 
 // FSM controller
 reg sdram_rst_n = 0;
-reg sdram_chip = 0;
 always @(posedge clk) begin
 	reg        check_in_progress; // when 1 - enables errors checking
 	reg        reset_req = 1;
@@ -172,7 +169,6 @@ always @(posedge clk) begin
 		dram_start <= 0;
 		reset_req <= 0;
 		sdram_rst_n <= 0;
-		sdram_chip <= chip;
 		rst_cnt <= 0;
 		if(rst_cnt < 5000000) begin
 			rst_cnt <= rst_cnt + 1;

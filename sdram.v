@@ -50,8 +50,7 @@ module sdram
 	input      [15:0] wdat,  // input, data to be written to memory
 	output reg [15:0] rdat,  // output, data last read from memory
 
-	input             sz32mb,
-	input             chip,
+	input       [1:0] sz,
 
 	output reg        DRAM_LDQM,DRAM_UDQM,
 	output reg        DRAM_WE_N,
@@ -127,10 +126,9 @@ reg  [2:0] cas_cmd;
 reg        wr,rd;
 always @ (posedge clk) begin
 	reg  [9:0] cas_addr;
-	reg [22:0] addr; // x4
+	reg [23:0] addr; // x4
 	reg  [5:0] rcnt = 0;
 	reg        rnw_reg;
-	reg        sz32mb_reg;
 
 	DRAM_DQ <= (wr & ready) ? wdat : 16'bZ;
 	rdat    <= DRAM_DQ;
@@ -150,19 +148,19 @@ always @ (posedge clk) begin
 				end
 				10, 13 : begin
 					cmd        <= CMD_LOAD_MODE;
-					sdaddr     <= 13'b0000000110010; // WRITE BURST, LATENCY=3, BURST=4
+					sdaddr     <= 13'b000_0_00_011_0_010; // WRITE BURST, LATENCY=3, BURST=4
 				end
 			endcase
 		end
-		wr         <= 0;
-		rd         <= 0;
-		rcnt       <= 0;
-		done       <= 0;
-		addr       <= -23'b1;
-		sz32mb_reg <= sz32mb;
+		wr     <= 0;
+		rd     <= 0;
+		rcnt   <= 0;
+		done   <= 0;
+		addr   <= -24'b1;
 	end
 	else begin
-		cs <= chip;
+		
+		if(cmd == CMD_AUTO_REFRESH && !cs) {cs,cmd} <= {1'b1, CMD_AUTO_REFRESH};
 
 		case(state)
 
@@ -174,13 +172,14 @@ always @ (posedge clk) begin
 
 				if(rcnt == 50) begin
 					cmd     <= CMD_AUTO_REFRESH;
+					cs      <= 0;
 					rcnt    <= 0;
 				end
-				else if(&addr) begin
-					done    <= 1;
-				end
+				else if(sz == 3 && &addr[23:0]) done <= 1;
+				else if(sz == 2 && &addr[22:0]) done <= 1;
+				else if(sz <= 1 && &addr[21:0]) done <= 1;
 				else begin
-					{cas_addr[9],cas_addr[8:2],sdaddr,ba,cas_addr[1:0]} <= {addr, 2'b00};
+					{cs,cas_addr[9],cas_addr[8:2],sdaddr,ba,cas_addr[1:0]} <= {addr, 2'b00};
 					wr      <= ~rnw_reg;
 					cas_cmd <= rnw_reg ? CMD_READ : CMD_WRITE;
 					cmd     <= CMD_ACTIVE;
@@ -201,8 +200,6 @@ always @ (posedge clk) begin
 				done       <= 0;
 				rnw_reg    <= rnw;
 				addr       <= 0;
-				addr[22]   <= sz32mb_reg;
-				if(rnw) sz32mb_reg<= sz32mb;
 			end
 		end
 	end

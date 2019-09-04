@@ -52,14 +52,14 @@ wire rezpix;
 assign rn = (vcount>=VREZ2) ? r2[31:28] : (vcount>=VREZ1) ? r1[31:28] : r3[31:28];
 
 wire pix = (vcount<VREZ3) ? mpix : rezpix;
-wire [5:0] pixcolor = (vcount>=VREZ2) ? 6'b001100 : (vcount>=VREZ1) ? 6'b110000 : (vcount>=VREZ3) ? 6'b111100 : 6'b110011;
+wire [5:0] pixcolor = (vcount>=VREZ2) ? 6'b001100 : (vcount>=VREZ1) ? (!xr[5:3] ? 6'b110011 : 6'b110000) : (vcount>=VREZ3) ? 6'b111100 : 6'b110011;
 
 hexnum digs
 (
 	.value(rn),
 	.x({xr[2],xr[1]|xr[0]}),
 	.y({yr[3:2],yr[1]|yr[0]}),
-	.hide(vcount<VREZ1 && xr[5:3]==4),
+	.hide((vcount<VREZ1 && xr[5:3]==4) || (vcount<VREZ2 && vcount>=VREZ1 && xr[5:3]==1)),
 
 	.image(rezpix)
 );

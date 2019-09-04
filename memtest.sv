@@ -149,7 +149,7 @@ localparam CONF_STR =
 };
 
 reg  [10:0] ps2_key;
-wire [15:0] sdram_sz;
+wire  [1:0] sdram_sz;
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
 	.clk_sys(CLK_50M),
@@ -219,7 +219,6 @@ reg   [3:0] pos  = 0;
 reg  [15:0] mins = 0;
 reg  [15:0] secs = 0;
 reg         auto = 0;
-reg         chip = 0;
 
 reg			ph_shift = 0;
 reg  [31:0] pre_phase;
@@ -409,12 +408,6 @@ always @(posedge CLK_50M) begin
 				auto <= 0;
 				ph_shift <= 1;
 			end
-			if(ps2_key[7:0] == 'h0D && &sdram_sz[1:0]) begin
-				chip <= ~chip;
-				recfg <= 1;
-				auto <= 0;
-				ph_shift <= 0;
-			end
 		end
 
 		if(ps2_key[7:0] == 'h12) shift <= ps2_key[9];
@@ -438,7 +431,9 @@ always @(posedge clk_ram) begin
 	if(timeout) timeout <= timeout - 1;
 	reset <= |timeout;
 
-	if(RESET || status[0] || buttons[1] || recfg || ~locked) timeout <= 1000000;
+	if((buttons[1] || recfg || ~locked) && (timeout < 1000000)) timeout <= 1000000;
+
+	if(RESET || status[0]) timeout <= 300000000;
 end
 
 wire [31:0] passcount, failcount;
@@ -446,8 +441,7 @@ tester my_memtst
 (
 	.clk(clk_ram),
 	.rst_n(~reset),
-	.sz32mb(~sdram_sz[1]),
-	.chip(chip),
+	.sz(sdram_sz),
 	.passcount(passcount),
 	.failcount(failcount),
 	.DRAM_DQ(SDRAM_DQ),
@@ -481,9 +475,9 @@ wire [1:0] b, r, g;
 vgaout showrez
 (
 	.clk(videoclk),
-	.rez1(passcount),
+	.rez1({sdram_sz, passcount[27:0]}),
 	.rez2(failcount),
-	.bg(chip ? 6'b000101 : 6'b000001),
+	.bg(6'b000001),
 	.freq(16'hF000 | freq[pos]),
 	.elapsed(ph_shift ? pre_phase[15:0] : mins),
 	.mark(ph_shift ? 8'hF0 : auto ? 8'h80 >> secs[3:0] : 8'd0),
