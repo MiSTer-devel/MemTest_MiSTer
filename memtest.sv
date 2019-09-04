@@ -148,8 +148,8 @@ localparam CONF_STR =
 	"V,v",`BUILD_DATE
 };
 
-reg [10:0] ps2_key;
-
+reg  [10:0] ps2_key;
+wire [15:0] sdram_sz;
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
 	.clk_sys(CLK_50M),
@@ -158,6 +158,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.conf_str(CONF_STR),
 	.status(status),
 	.buttons(buttons),
+	.sdram_sz(sdram_sz),
 
 	.ps2_key(ps2_key),
 	.ps2_kbd_led_use(0),
@@ -203,7 +204,7 @@ wire [31:0] cfg_param[44] =
 	/*167*/ 'h00808, 'hB33332DD, 'h20302, 29,
 	/*160*/ 'h00808, 'h00000001, 'h20302, 28,
 	/*150*/ 'h20807, 'h00000001, 'h20302, 27,
-	/*140*/ 'h00707, 'h00000001, 'h20302, 20,
+	/*140*/ 'h00707, 'h00000001, 'h20302, 22,
 	/*130*/ 'h00505, 'h66666611, 'h00202, 26,
 	/*120*/ 'h00707, 'h66666611, 'h00303, 17,
 	/*110*/ 'h20706, 'h333332DD, 'h00303, 17,
@@ -218,6 +219,7 @@ reg   [3:0] pos  = 0;
 reg  [15:0] mins = 0;
 reg  [15:0] secs = 0;
 reg         auto = 0;
+reg         chip = 0;
 
 reg			ph_shift = 0;
 reg  [31:0] pre_phase;
@@ -407,6 +409,12 @@ always @(posedge CLK_50M) begin
 				auto <= 0;
 				ph_shift <= 1;
 			end
+			if(ps2_key[7:0] == 'h0D && &sdram_sz[1:0]) begin
+				chip <= ~chip;
+				recfg <= 1;
+				auto <= 0;
+				ph_shift <= 0;
+			end
 		end
 
 		if(ps2_key[7:0] == 'h12) shift <= ps2_key[9];
@@ -434,12 +442,12 @@ always @(posedge clk_ram) begin
 end
 
 wire [31:0] passcount, failcount;
-defparam my_memtst.DRAM_COL_SIZE = 9;
-defparam my_memtst.DRAM_ROW_SIZE = 13;
-mem_tester my_memtst
+tester my_memtst
 (
 	.clk(clk_ram),
 	.rst_n(~reset),
+	.sz32mb(~sdram_sz[1]),
+	.chip(chip),
 	.passcount(passcount),
 	.failcount(failcount),
 	.DRAM_DQ(SDRAM_DQ),
@@ -475,6 +483,7 @@ vgaout showrez
 	.clk(videoclk),
 	.rez1(passcount),
 	.rez2(failcount),
+	.bg(chip ? 6'b000101 : 6'b000001),
 	.freq(16'hF000 | freq[pos]),
 	.elapsed(ph_shift ? pre_phase[15:0] : mins),
 	.mark(ph_shift ? 8'hF0 : auto ? 8'h80 >> secs[3:0] : 8'd0),

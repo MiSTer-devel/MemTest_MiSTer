@@ -7,6 +7,7 @@ module vgaout
 
 	input [31:0] rez1,
 	input [31:0] rez2,
+	input  [5:0] bg,
 
 	input [15:0] freq,
 	input [15:0] elapsed,
@@ -129,7 +130,7 @@ always @(posedge clk) begin
 
 	end
 
-	{g,r,b} <= pix ? pixcolor : (hscr&vscr) ? 6'b000001 : 6'b000000;
+	{g,r,b} <= pix ? pixcolor : (hscr&vscr) ? bg : 6'b000000;
 
 end
 
