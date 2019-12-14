@@ -52,43 +52,30 @@ module sdram
 
 	input       [1:0] sz,
 
-	output reg        DRAM_LDQM,DRAM_UDQM,
-	output reg        DRAM_WE_N,
-	output reg        DRAM_CAS_N,
-	output reg        DRAM_RAS_N,
-	output reg        DRAM_CS_N,
-	output reg        DRAM_BA_0,
-	output reg        DRAM_BA_1,
+	output            DRAM_CLK,
+	output            DRAM_LDQM,DRAM_UDQM,
+	output            DRAM_WE_N,
+	output            DRAM_CAS_N,
+	output            DRAM_RAS_N,
+	output            DRAM_CS_N,
+	output            DRAM_BA_0,
+	output            DRAM_BA_1,
 	inout  reg [15:0] DRAM_DQ,
-	output reg [12:0] DRAM_ADDR
+	output     [12:0] DRAM_ADDR
 );
 
-reg [12:0] sdaddr;
-reg  [1:0] ba;
+assign {DRAM_BA_1,DRAM_BA_0} = ba;
+assign DRAM_ADDR  = sdaddr;
+assign DRAM_WE_N  = cmd[0];
+assign DRAM_CAS_N = cmd[1];
+assign DRAM_RAS_N = cmd[2];
+assign DRAM_CS_N  = cs;
+assign {DRAM_UDQM,DRAM_LDQM} = DRAM_ADDR[12:11];
 
-always @(*) begin
-	if(!rst_n) begin
-		{DRAM_UDQM,DRAM_LDQM} = 2'bZZ;
-		{DRAM_BA_1,DRAM_BA_0} = 2'bZZ;
-		DRAM_ADDR  = 13'bZ;
-		DRAM_WE_N  = 1'bZ;
-		DRAM_CAS_N = 1'bZ;
-		DRAM_RAS_N = 1'bZ;
-		DRAM_CS_N  = 1'bZ;
-	end
-	else begin
-		{DRAM_UDQM,DRAM_LDQM} = sdaddr[12:11];
-		{DRAM_BA_1,DRAM_BA_0} = ba;
-		DRAM_ADDR  = sdaddr;
-		DRAM_WE_N  = cmd[0];
-		DRAM_CAS_N = cmd[1];
-		DRAM_RAS_N = cmd[2];
-		DRAM_CS_N  = cs;
-	end
-end
-
-reg  [2:0] cmd;
-reg        cs;
+reg [12:0] sdaddr, sdaddr2;
+reg  [1:0] ba, ba2;
+reg  [2:0] cmd, cmd2;
+reg        cs, cs2;
 
 wire [2:0] CMD_NOP             = 3'b111;
 wire [2:0] CMD_ACTIVE          = 3'b011;
@@ -113,96 +100,168 @@ always @ (posedge clk) begin
 	end
 end
 
-reg [2:0] state;
-always @ (posedge clk) state <= state + 1'd1;
-
+reg ready2;
 always @ (posedge clk) begin
-	ready <= 0;
-	if(wr) case(state) 3,4,5,6: ready <= 1; endcase
-	if(rd) case(state) 0,1,2,3: ready <= 1; endcase
+	ready2 <= 0;
+	if(wr) case(state) 3,4,5,6: ready2 <= 1; endcase
+	if(rd) case(state) 2,3,4,5: ready2 <= 1; endcase
 end
 
-reg  [2:0] cas_cmd;
-reg        wr,rd;
+reg [2:0] state;
+reg       wr,rd,wr2,done2;
 always @ (posedge clk) begin
-	reg  [9:0] cas_addr;
-	reg [23:0] addr; // x4
+	reg  [9:0] cas_addr, cas_addr2;
+	reg [23:0] addr, addr2, addr3; // x4
 	reg  [5:0] rcnt = 0;
 	reg        rnw_reg;
+	reg  [1:0] rfsh;
+	reg [15:0] rdat2,rdat3;
+	reg        done3;
+	reg [4:0]  is, is2, is3;
+	reg [2:0]  st;
+	reg        id;
+	reg [2:0]  cas_cmd, cas_cmd2;
+	reg        wdat_req;
 
-	DRAM_DQ <= (wr & ready) ? wdat : 16'bZ;
-	rdat    <= DRAM_DQ;
-	cmd     <= CMD_NOP;
+	st    <= st + 1'd1;
+	state <= st;
 
-	if(!init_done) begin
-		cs <= initstate[4];
+	DRAM_DQ <= 16'bZ;
+
+	wr <= wr2;
+	wdat_req <= wr2 & ready2;
+	if(wdat_req) DRAM_DQ <= wdat;
+
+	rdat3   <= DRAM_DQ;
+	rdat2   <= rdat3;
+	rdat    <= rdat2;
+	cmd2    <= CMD_NOP;
+
+	is3 <= initstate;
+	is2 <= is3;
+	is  <= is2;
+	id  <= init_done;
+
+	if(!id) begin
+		cs2 <= is[4];
 
 		if(state == 1) begin
-			case(initstate[3:0])
+			case(is[3:0])
 				2 : begin
-					sdaddr[10] <= 1; // all banks
-					cmd        <= CMD_PRECHARGE;
+					sdaddr2[10]<= 1; // all banks
+					cmd2       <= CMD_PRECHARGE;
 				end
 				4,7 : begin
-					cmd        <= CMD_AUTO_REFRESH;
+					cmd2       <= CMD_AUTO_REFRESH;
 				end
 				10, 13 : begin
-					cmd        <= CMD_LOAD_MODE;
-					sdaddr     <= 13'b000_0_00_011_0_010; // WRITE BURST, LATENCY=3, BURST=4
+					cmd2       <= CMD_LOAD_MODE;
+					sdaddr2    <= 13'b000_0_00_011_0_010; // WRITE BURST, LATENCY=3, BURST=4
 				end
 			endcase
 		end
-		wr     <= 0;
-		rd     <= 0;
-		rcnt   <= 0;
-		done   <= 0;
-		addr   <= -24'b1;
+		wr2  <= 0;
+		wr   <= 0;
+		rd   <= 0;
+		rcnt <= 0;
+		done2<= 0;
+	end
+	else if(done2) begin
+		rd    <= 0;
+		wr2   <= 0;
+		wr    <= 0;
+		addr  <= 0;
+		addr2 <= 0;
+		st    <= 0;
+		done3 <= 0;
+		if(start) begin
+			done2   <= 0;
+			rnw_reg <= rnw;
+		end
 	end
 	else begin
-		
-		if(cmd == CMD_AUTO_REFRESH && !cs) {cs,cmd} <= {1'b1, CMD_AUTO_REFRESH};
-
 		case(state)
+			0: begin
+					rcnt       <= rcnt + 1'd1;
+					if(rcnt == 50) rcnt <= 0;
+
+					rfsh <= 0;
+					if(rcnt >= 49) rfsh <= {1'b1, rcnt[0]};
+					addr3 <= addr;
+				end
 
 			// RAS
 			1 : begin
-				cas_cmd    <= CMD_NOP;
-				wr         <= 0;
-				rcnt       <= rcnt + 1'd1;
-
-				if(rcnt == 50) begin
-					cmd     <= CMD_AUTO_REFRESH;
-					cs      <= 0;
-					rcnt    <= 0;
+					cas_cmd2   <= CMD_NOP;
+					wr2        <= 0;
+					if(rfsh[1]) begin
+						cmd2    <= CMD_AUTO_REFRESH;
+						cs2     <= rfsh[0];
+					end
+					else if(~done3) begin
+						{cs2,cas_addr2[9],cas_addr2[8:2],sdaddr2,ba2,cas_addr2[1:0]} <= {addr3, 2'b00};
+						wr2     <= ~rnw_reg;
+						cas_cmd2<= rnw_reg ? CMD_READ : CMD_WRITE;
+						cmd2    <= CMD_ACTIVE;
+						addr2   <= addr + 1'd1;
+					end
 				end
-				else if(sz == 3 && &addr[23:0]) done <= 1;
-				else if(sz == 2 && &addr[22:0]) done <= 1;
-				else if(sz <= 1 && &addr[21:0]) done <= 1;
-				else begin
-					{cs,cas_addr[9],cas_addr[8:2],sdaddr,ba,cas_addr[1:0]} <= {addr, 2'b00};
-					wr      <= ~rnw_reg;
-					cas_cmd <= rnw_reg ? CMD_READ : CMD_WRITE;
-					cmd     <= CMD_ACTIVE;
-					addr    <= addr + 1'd1;
+			
+			2 : begin
+					addr       <= addr2;
+					cas_addr   <= cas_addr2;
+					cas_cmd    <= cas_cmd2;
 				end
-			end
 
 			// CAS
 			4 : begin
-				sdaddr     <= {1'b1, cas_addr}; // AUTO PRECHARGE
-				cmd        <= cas_cmd;
-				rd         <= (cas_cmd == CMD_READ);
-			end
+					sdaddr2    <= {1'b1, cas_addr}; // AUTO PRECHARGE
+					cmd2       <= cas_cmd;
+				end
+			
+			7: begin
+					if(sz == 3 && &addr[23:0]) done3 <= 1;
+					if(sz == 2 && &addr[22:0]) done3 <= 1;
+					if(sz <= 1 && &addr[21:0]) done3 <= 1;
+					rd <= (cas_cmd == CMD_READ);
+					if(done3) done2 <= 1;
+				end
 		endcase
-
-		if(done) begin
-			if(start) begin
-				done       <= 0;
-				rnw_reg    <= rnw;
-				addr       <= 0;
-			end
-		end
 	end
 end
+
+always @ (posedge clk) begin
+	sdaddr <= sdaddr2;
+	ba <= ba2;
+	cmd <= cmd2;
+	cs <= cs2;
+	ready <= ready2;
+	done <= done2;
+end
+
+altddio_out
+#(
+	.extend_oe_disable("OFF"),
+	.intended_device_family("Cyclone V"),
+	.invert_output("OFF"),
+	.lpm_hint("UNUSED"),
+	.lpm_type("altddio_out"),
+	.oe_reg("UNREGISTERED"),
+	.power_up_high("OFF"),
+	.width(1)
+)
+sdramclk_ddr
+(
+	.datain_h(1'b0),
+	.datain_l(1'b1),
+	.outclock(clk),
+	.dataout(DRAM_CLK),
+	.aclr(1'b0),
+	.aset(1'b0),
+	.oe(1'b1),
+	.outclocken(1'b1),
+	.sclr(1'b0),
+	.sset(1'b0)
+);
 
 endmodule

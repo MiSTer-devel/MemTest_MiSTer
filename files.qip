@@ -1,7 +1,7 @@
 set_global_assignment -name QIP_FILE [join [list vpll. [regexp -inline {[0-9]+} $quartus(version)] .qip] {}] 
 set_global_assignment -name VERILOG_FILE sdram.v
-set_global_assignment -name SDC_FILE sdram.sdc
 set_global_assignment -name VERILOG_FILE vgaout.v
 set_global_assignment -name VERILOG_FILE rnd_vec_gen.v
 set_global_assignment -name VERILOG_FILE tester.v
+set_global_assignment -name SDC_FILE memtest.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE memtest.sv

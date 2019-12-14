@@ -16,6 +16,7 @@ module tester
 	output reg [31:0] passcount,
 	output reg [31:0] failcount,
 
+	output        DRAM_CLK,
 	inout  [15:0] DRAM_DQ,
 	output [12:0] DRAM_ADDR,
 	output        DRAM_LDQM,DRAM_UDQM,
@@ -28,19 +29,17 @@ module tester
 );
 
 
-reg rnd_init,rnd_save,rnd_restore; // rnd_vec_gen control
+reg rnd_save,rnd_restore; // rnd_vec_gen control
 wire [15:0] rnd_out; // rnd_vec_gen output
 
 rnd_vec_gen my_rnd
 (
 	.clk(clk),
-	.init(rnd_init),
 	.next(dram_ready),
 	.save(rnd_save),
 	.restore(rnd_restore),
 	.out(rnd_out)
 );
-defparam my_rnd.OUT_SIZE = 16;
 
 
 reg dram_start,dram_rnw;
@@ -58,6 +57,7 @@ sdram my_dram
 	.ready(dram_ready),
 	.rdat(dram_rdat),
 	.wdat(rnd_out),
+	.DRAM_CLK(DRAM_CLK),
 	.DRAM_DQ(DRAM_DQ),
 	.DRAM_ADDR(DRAM_ADDR),
 	.DRAM_CS_N(DRAM_CS_N),
@@ -161,8 +161,6 @@ always @(posedge clk) begin
 
 		check_in_progress <= 0;
 
-		rnd_init <= 1; //begin RND init
-
 		rnd_save <= 0;
 		rnd_restore <= 0;
 
@@ -179,10 +177,6 @@ always @(posedge clk) begin
 	INIT1: begin
 		dram_start  <= 0; // end dram start
 		sdram_rst_n <= 1;
-	end
-
-	INIT2: begin
-		rnd_init  <= 0; // end rnd init
 	end
 
 	//////////////////////////////////////////////////
