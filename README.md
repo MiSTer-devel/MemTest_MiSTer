@@ -1,12 +1,19 @@
 # MemTest - Utility to test SDRAM daughter board.
 
-## Screen shows 4 numbers:
-* Upper left is time in minutes passed.
-* Upper right is memory frequency in MHz.
-* Middle cyan is SDRAM size: 0-none, 1-32MB, 2-64MB, 3-128MB.
-* Middle green is amount of passed cycles (each cycle is size of SDRAM)
-* Lower (red) is amount of errors.
-* Dash in cyan color will fly on top in auto mode.
+## Memtest screen:
+
+![MemTest screen](img/memtest.png)
+
+ 1. Auto mode indicator (animated),
+ 2. Test time passed in minutes,
+ 3. Current memory module frequency in MHz,
+ 4. Memory module size:
+    * 0 - no memory board detected
+    * 1 - 32 MB
+    * 2 - 64 MB
+    * 3 - 128 MB
+ 5. Number of of passed test cycles (each cycle is 32 MB),
+ 6. Number of failed tests.
 
 ## Controls (keyboard)
 * Up - increase frequency
@@ -16,4 +23,4 @@
 With every error frequency will be decreased.
 
 Test is passed if amount of errors is 0. For quick test let it run for 10 minutes in auto mode. If you want to be sure, let it run for 1-2 hours.
-Board should pass at least 130MHz clock test. Any higher clock will assure the higher quality of the board.
+Board should pass at least 130 MHz clock test. Any higher clock will assure the higher quality of the board.
