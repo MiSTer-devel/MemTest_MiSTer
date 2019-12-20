@@ -205,21 +205,20 @@ reg pll_reset = 0;
 // Phases here are empirically adjusted based on 167MHz synthesized core 
 // so arn't reliable for fixed frequency cores.
 wire [31:0] cfg_param[44] =
-'{ //          M         K          C    Ph
-	/*167*/ 'h00808, 'hB33332DD, 'h20302, 29,
-	/*160*/ 'h00808, 'h00000001, 'h20302, 28,
-	/*150*/ 'h20807, 'h00000001, 'h20302, 27,
-	/*140*/ 'h00707, 'h00000001, 'h20302, 23,
-	/*130*/ 'h00505, 'h66666611, 'h00202, 26,
-	/*120*/ 'h00707, 'h66666611, 'h00303, 23,
-	/*110*/ 'h20706, 'h333332DD, 'h00303, 17,
-	/*100*/ 'h00404, 'h00000001, 'h00202, 14,
-	/* 90*/ 'h00707, 'h66666666, 'h00404, 16,
-	/* 80*/ 'h00707, 'h66666666, 'h20504, 8,
-	/* 70*/ 'h00707, 'h00000001, 'h00505, 0
+'{ //      M         K          C
+	'h167, 'h00808, 'hB33332DD, 'h20302,
+	'h160, 'h00808, 'h00000001, 'h20302,
+	'h150, 'h20807, 'h00000001, 'h20302,
+	'h140, 'h00707, 'h00000001, 'h20302,
+	'h130, 'h00505, 'h66666611, 'h00202,
+	'h120, 'h00707, 'h66666611, 'h00303,
+	'h110, 'h20706, 'h333332DD, 'h00303,
+	'h100, 'h00404, 'h00000001, 'h00202,
+	 'h90, 'h00707, 'h66666666, 'h00404,
+	 'h80, 'h00707, 'h66666666, 'h20504,
+	 'h70, 'h00707, 'h00000001, 'h00505
 };
 
-wire [11:0] freq[11] = '{12'h167, 12'h160, 12'h150, 12'h140, 12'h130, 12'h120, 12'h110, 12'h100, 12'h90, 12'h80, 12'h70};
 reg   [3:0] pos  = 0;
 reg  [15:0] mins = 0;
 reg  [15:0] secs = 0;
@@ -246,14 +245,14 @@ always @(posedge CLK_50M) begin
 				// M
 				1: begin
 						mgmt_address   <= 4;
-						mgmt_writedata <= cfg_param[{pos, 2'd0}];
+						mgmt_writedata <= cfg_param[{pos, 2'd1}];
 						mgmt_write     <= 1;
 					end
 
 				// K
 				2: begin
 						mgmt_address   <= 7;
-						mgmt_writedata <= cfg_param[{pos, 2'd1}];
+						mgmt_writedata <= cfg_param[{pos, 2'd2}];
 						mgmt_write     <= 1;
 					end
 
@@ -267,7 +266,7 @@ always @(posedge CLK_50M) begin
 				// C0
 				4: begin
 						mgmt_address   <= 5;
-						mgmt_writedata <= cfg_param[{pos, 2'd2}];
+						mgmt_writedata <= cfg_param[{pos, 2'd3}];
 						mgmt_write     <= 1;
 					end
 
@@ -355,9 +354,15 @@ always @(posedge CLK_50M) begin
 		end
 	end
 
-	if(auto && failcount && !recfg && pos < 10) begin
+	if(auto && (failcount && passcount) && !recfg && pos < 10) begin
 		recfg <= 1;
 		pos <= pos + 1'd1;
+	end
+	
+	if(status[0] | buttons[1]) begin
+		recfg <= 1;
+		pos <= 0;
+		auto <= 1;
 	end
 end
 
@@ -372,9 +377,9 @@ always @(posedge clk_ram) begin
 	if(timeout) timeout <= timeout - 1;
 	reset <= |timeout;
 
-	if((buttons[1] || recfg || ~locked) && (timeout < 1000000)) timeout <= 1000000;
+	if((recfg || ~locked) && (timeout < 1000000)) timeout <= 1000000;
 
-	if(RESET || status[0]) timeout <= 300000000;
+	if(RESET) timeout <= 100000000;
 end
 
 wire [31:0] passcount, failcount;
@@ -420,9 +425,9 @@ vgaout showrez
 	.rez1({sdram_sz, passcount[27:0]}),
 	.rez2(failcount),
 	.bg(6'b000001),
-	.freq(16'hF000 | freq[pos]),
+	.freq(16'hF000 | cfg_param[{pos, 2'd0}][11:0]),
 	.elapsed(mins),
-	.mark(auto ? 8'h80 >> secs[3:0] : 8'd0),
+	.mark(8'h80 >> {~auto, secs[2:0]}),
 	.hs(hs),
 	.vs(vs),
 	.de(VGA_DE),
