@@ -3,7 +3,8 @@
 ## Screen shows 4 numbers:
 * Upper left is time in minutes passed.
 * Upper right is memory frequency in MHz.
-* Middle (green) is amount of passed cycles (each cycle is 32MB)
+* Middle cyan is SDRAM size: 0-none, 1-32MB, 2-64MB, 3-128MB.
+* Middle green is amount of passed cycles (each cycle is size of SDRAM)
 * Lower (red) is amount of errors.
 * Dash in cyan color will fly on top in auto mode.
 
