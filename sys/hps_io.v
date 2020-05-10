@@ -2,7 +2,7 @@
 // hps_io.v
 //
 // Copyright (c) 2014 Till Harbaum <till@harbaum.org>
-// Copyright (c) 2017-2019 Alexey Melnikov
+// Copyright (c) 2017-2020 Alexey Melnikov
 //
 // This source file is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published
@@ -124,10 +124,6 @@ module hps_io #(parameter STRLEN=0, PS2DIV=0, WIDE=0, VDNUM=1, PS2WE=0)
 
 	// UART flags
 	input      [15:0] uart_mode,
-	
-	// CD interface
-	input      [48:0] cd_in,
-	output reg [48:0] cd_out, 
 
 	// ps2 keyboard emulation
 	output            ps2_kbd_clk_out,
@@ -153,14 +149,13 @@ module hps_io #(parameter STRLEN=0, PS2DIV=0, WIDE=0, VDNUM=1, PS2WE=0)
 	output reg [15:0] ps2_mouse_ext = 0, // 15:8 - reserved(additional buttons), 7:0 - wheel movements
 
 	inout      [21:0] gamma_bus,
-	
+
 	// for core-specific extensions
-	inout      [34:0] EXT_BUS
+	inout      [35:0] EXT_BUS
 );
 
 assign EXT_BUS[31:16] = HPS_BUS[31:16];
-assign EXT_BUS[33]    = HPS_BUS[33];
-assign EXT_BUS[34]    = |HPS_BUS[35:34];
+assign EXT_BUS[35:33] = HPS_BUS[35:33];
 
 localparam MAX_W = $clog2((512 > (STRLEN+1)) ? 512 : (STRLEN+1))-1;
 
@@ -168,14 +163,14 @@ localparam DW = (WIDE) ? 15 : 7;
 localparam AW = (WIDE) ?  7 : 8;
 localparam VD = VDNUM-1;
 
-wire        io_wait  = ioctl_wait;
-wire        io_enable= |HPS_BUS[35:34];
 wire        io_strobe= HPS_BUS[33];
+wire        io_enable= HPS_BUS[34];
+wire        fp_enable= HPS_BUS[35];
 wire        io_wide  = (WIDE) ? 1'b1 : 1'b0;
 wire [15:0] io_din   = HPS_BUS[31:16];
 reg  [15:0] io_dout;
 
-assign HPS_BUS[37]   = io_wait;
+assign HPS_BUS[37]   = ioctl_wait;
 assign HPS_BUS[36]   = clk_sys;
 assign HPS_BUS[32]   = io_wide;
 assign HPS_BUS[15:0] = EXT_BUS[32] ? EXT_BUS[15:0] : io_dout;
@@ -248,8 +243,6 @@ always@(posedge clk_sys) begin
 	reg  [3:0] stflg = 0;
 	reg [63:0] status_req;
 	reg        old_status_set = 0;
-	reg  [7:0] cd_req = 0;
-	reg        old_cd = 0; 
 	reg        old_info = 0;
 	reg  [7:0] info_n = 0;
 
@@ -262,9 +255,6 @@ always@(posedge clk_sys) begin
 	old_info <= info_req;
 	if(~old_info & info_req) info_n <= info;
 
-	old_cd <= cd_in[48];
-	if(old_cd ^ cd_in[48]) cd_req <= cd_req + 1'd1; 
-	
 	sd_buff_wr <= b_wr[0];
 	if(b_wr[2] && (~&sd_buff_addr)) sd_buff_addr <= sd_buff_addr + 1'b1;
 	b_wr <= (b_wr<<1);
@@ -283,7 +273,6 @@ always@(posedge clk_sys) begin
 		end
 		if(cmd == 'h22) RTC[64] <= ~RTC[64];
 		if(cmd == 'h24) TIMESTAMP[32] <= ~TIMESTAMP[32];
-		if(cmd == 'h35) cd_out[48] <= ~cd_out[48]; 
 		cmd <= 0;
 		byte_cnt <= 0;
 		sd_ack <= 0;
@@ -307,7 +296,6 @@ always@(posedge clk_sys) begin
 				'h2B: io_dout <= 1;
 				'h2F: io_dout <= 1;
 				'h32: io_dout <= gamma_bus[21];
-				'h34: io_dout <= cd_req; 
 				'h36: begin io_dout <= info_n; info_n <= 0; end
 			endcase
 
@@ -328,34 +316,34 @@ always@(posedge clk_sys) begin
 
 				// store incoming ps2 mouse bytes
 				'h04: begin
-						if(PS2DIV) begin
-							mouse_data <= io_din[7:0];
-							mouse_we   <= 1;
+							if(PS2DIV) begin
+								mouse_data <= io_din[7:0];
+								mouse_we   <= 1;
+							end
+							if(&io_din[15:8]) ps2skip <= 1;
+							if(~&io_din[15:8] && ~ps2skip && !byte_cnt[MAX_W:2]) begin
+								case(byte_cnt[1:0])
+									1: ps2_mouse[7:0]   <= io_din[7:0];
+									2: ps2_mouse[15:8]  <= io_din[7:0];
+									3: ps2_mouse[23:16] <= io_din[7:0];
+								endcase
+								case(byte_cnt[1:0])
+									1: ps2_mouse_ext[7:0]  <= {io_din[14], io_din[14:8]};
+									2: ps2_mouse_ext[11:8] <= io_din[11:8];
+									3: ps2_mouse_ext[15:12]<= io_din[11:8];
+								endcase
+							end
 						end
-						if(&io_din[15:8]) ps2skip <= 1;
-						if(~&io_din[15:8] && ~ps2skip && !byte_cnt[MAX_W:2]) begin
-							case(byte_cnt[1:0])
-								1: ps2_mouse[7:0]   <= io_din[7:0];
-								2: ps2_mouse[15:8]  <= io_din[7:0];
-								3: ps2_mouse[23:16] <= io_din[7:0];
-							endcase
-							case(byte_cnt[1:0])
-								1: ps2_mouse_ext[7:0]  <= {io_din[14], io_din[14:8]};
-								2: ps2_mouse_ext[11:8] <= io_din[11:8];
-								3: ps2_mouse_ext[15:12]<= io_din[11:8];
-							endcase
-						end
-					end
 
 				// store incoming ps2 keyboard bytes
 				'h05: begin
-						if(&io_din[15:8]) ps2skip <= 1;
-						if(~&io_din[15:8] & ~ps2skip) ps2_key_raw[31:0] <= {ps2_key_raw[23:0], io_din[7:0]};
-						if(PS2DIV) begin
-							kbd_data <= io_din[7:0];
-							kbd_we <= 1;
+							if(&io_din[15:8]) ps2skip <= 1;
+							if(~&io_din[15:8] & ~ps2skip) ps2_key_raw[31:0] <= {ps2_key_raw[23:0], io_din[7:0]};
+							if(PS2DIV) begin
+								kbd_data <= io_din[7:0];
+								kbd_we <= 1;
+							end
 						end
-					end
 
 				// reading config string, returning a byte from string
 				'h14: if(byte_cnt < STRLEN + 1) io_dout[7:0] <= conf_str[(STRLEN - byte_cnt)<<3 +:8];
@@ -378,15 +366,15 @@ always@(posedge clk_sys) begin
 				// send sector IO -> FPGA
 				// flag that download begins
 				'h17: begin
-						sd_buff_dout <= io_din[DW:0];
-						b_wr <= 1;
-					end
+							sd_buff_dout <= io_din[DW:0];
+							b_wr <= 1;
+						end
 
 				// reading sd card write data
 				'h18: begin
-						if(~&sd_buff_addr) sd_buff_addr <= sd_buff_addr + 1'b1;
-						io_dout <= sd_buff_din;
-					end
+							if(~&sd_buff_addr) sd_buff_addr <= sd_buff_addr + 1'b1;
+							io_dout <= sd_buff_din;
+						end
 
 				// joystick analog
 				'h1a: if(!byte_cnt[MAX_W:2]) begin
@@ -419,9 +407,9 @@ always@(posedge clk_sys) begin
 
 				// notify image selection
 				'h1c: begin
-						img_mounted  <= io_din[VD:0] ? io_din[VD:0] : 1'b1;
-						img_readonly <= io_din[7];
-					end
+							img_mounted  <= io_din[VD:0] ? io_din[VD:0] : 1'b1;
+							img_readonly <= io_din[7];
+						end
 
 				// send image info
 				'h1d: if(byte_cnt<5) img_size[{byte_cnt-1'b1, 4'b0000} +:16] <= io_din;
@@ -483,27 +471,9 @@ always@(posedge clk_sys) begin
 				// Gamma
 				'h32: gamma_en <= io_din[0];
 				'h33: begin
-					gamma_wr_addr <= {(byte_cnt[1:0]-1'b1),io_din[15:8]};
-					{gamma_wr, gamma_value} <= {1'b1,io_din[7:0]};
-					if (byte_cnt[1:0] == 3) byte_cnt <= 1;
-				end
-
-				//CD get
-				'h34: if(!byte_cnt[MAX_W:3]) begin
-							case(byte_cnt[2:0])
-								1: io_dout <= cd_in[15:0];
-								2: io_dout <= cd_in[31:16];
-								3: io_dout <= cd_in[47:32];
-							endcase
-						end
-
-				//CD set
-				'h35: if(!byte_cnt[MAX_W:3]) begin
-							case(byte_cnt[2:0])
-								1: cd_out[15:0]  <= io_din;
-								2: cd_out[31:16] <= io_din;
-								3: cd_out[47:32] <= io_din;
-							endcase
+							gamma_wr_addr <= {(byte_cnt[1:0]-1'b1),io_din[15:8]};
+							{gamma_wr, gamma_value} <= {1'b1,io_din[7:0]};
+							if (byte_cnt[1:0] == 3) byte_cnt <= 1;
 						end
 			endcase
 		end
@@ -595,7 +565,7 @@ always@(posedge clk_sys) begin
 	ioctl_wr <= wr;
 	wr <= 0;
 
-	if(~io_enable) has_cmd <= 0;
+	if(~fp_enable) has_cmd <= 0;
 	else begin
 		if(io_strobe) begin
 
@@ -920,95 +890,6 @@ always @(posedge clk_100) begin
 	if(~old_vs2 & old_vs) begin
 		vid_vtime_hdmi <= vtime;
 		vtime <= 0;
-	end
-end
-
-endmodule
-
-
-//
-// Phase shift helper module for better 64MB/128MB modules support.
-//
-// Copyright (c) 2019 Alexey Melnikov
-//
-
-module phase_shift #(parameter M32MB=0, M64MB=0, M128MB=0)
-(
-	input        reset,
-
-	input        clk,
-	input        pll_locked,
-
-	output reg   phase_en,
-	output reg   updn,
-	input        phase_done,
-
-	input [15:0] sdram_sz,
-	output reg   ready
-);
-
-localparam ph32  = ($signed(M32MB ) >= 0) ? M32MB  : (0 - M32MB);
-localparam ph64  = ($signed(M64MB ) >= 0) ? M64MB  : (0 - M64MB);
-localparam ph128 = ($signed(M128MB) >= 0) ? M128MB : (0 - M128MB);
-
-localparam up32  = ($signed(M32MB ) >= 0) ? 1'b1 : 1'b0;
-localparam up64  = ($signed(M64MB ) >= 0) ? 1'b1 : 1'b0;
-localparam up128 = ($signed(M128MB) >= 0) ? 1'b1 : 1'b0;
-
-always @(posedge clk, posedge reset) begin
-	reg [2:0] state = 0;
-	reg [7:0] cnt;
-	reg [8:0] ph;
-	
-	if(reset) begin
-		state <= 0;
-		ready <= 0;
-	end
-	else begin
-		case(state)
-			0: begin
-					ready <= 0;
-					if(pll_locked) state <= state + 1'd1;
-				end
-			1: if(sdram_sz[15]) begin
-					cnt <= 0;
-					if(sdram_sz[14]) ph <= sdram_sz[8:0];
-					else begin
-						case(sdram_sz[1:0])
-							0: ph <= 0;
-							1: ph <= {up32[0],ph32[7:0]};
-							2: ph <= {up64[0],ph64[7:0]};
-							3: ph <= {up128[0],ph128[7:0]};
-						endcase
-					end
-					state <= state + 1'd1;
-				end
-			2: if(ph[7:0]) begin
-					ph[7:0] <= ph[7:0] - 1'd1;
-					updn <= ph[8];
-					state <= state + 1'd1;
-				end
-				else begin
-					state <= 6;
-				end
-			3: begin
-					phase_en <= 1;
-					state <= state + 1'd1;
-				end
-			4: if(~phase_done) begin
-					phase_en <= 0;
-					state <= state + 1'd1;
-				end
-			5: if(phase_done) begin
-					cnt <= cnt + 1'd1;
-					if(cnt == ph[7:0]) state <= state + 1'd1;
-					else state <= 3;
-				end
-			6: begin
-					ready <= 1;
-					if(!sdram_sz[15]) state <= 0;
-				end
-		endcase
 	end
 end
 
