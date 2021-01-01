@@ -156,6 +156,8 @@ localparam CONF_STR =
 
 reg  [10:0] ps2_key;
 wire  [1:0] sdram_sz;
+reg   [1:0] sdram_chip = 2'h0;
+
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
 	.clk_sys(CLK_50M),
@@ -202,15 +204,40 @@ pll_cfg pll_cfg
 reg recfg = 0;
 reg pll_reset = 0;
 
-// Phases here are empirically adjusted based on 167MHz synthesized core 
-// so arn't reliable for fixed frequency cores.
-wire [31:0] cfg_param[44] =
+wire [31:0] cfg_param[152] =
 '{ //      M         K          C
 	'h167, 'h00808, 'hB33332DD, 'h20302,
 	'h160, 'h00808, 'h00000001, 'h20302,
 	'h150, 'h20807, 'h00000001, 'h20302,
+	'h149, 'h00404, 'hF0A3D6B4, 'h20201,
+	'h148, 'h00404, 'hE147ADBF, 'h20201,
+	'h147, 'h00404, 'hD1EB851F, 'h20201,
+	'h146, 'h00404, 'hC28F5C29, 'h20201,
+	'h145, 'h00404, 'hB33332DD, 'h20201,
+	'h144, 'h00404, 'hA3D709E8, 'h20201,
+	'h143, 'h00404, 'h947AE148, 'h20201,
+	'h142, 'h00404, 'h851EB852, 'h20201,
+	'h141, 'h00404, 'h75C28F06, 'h20201,
 	'h140, 'h00707, 'h00000001, 'h20302,
+	'h139, 'h00404, 'h570A3D71, 'h20201,
+	'h138, 'h00404, 'h47AE147B, 'h20201,
+	'h137, 'h00404, 'h3851EA2E, 'h20201,
+	'h136, 'h00404, 'h28F5C239, 'h20201,
+	'h135, 'h00404, 'h1999999A, 'h20201,
+	'h134, 'h00505, 'hB851EB2F, 'h00202,
+	'h133, 'h00505, 'hA3D709E8, 'h00202,
+	'h132, 'h00505, 'h8F5C28F6, 'h00202,
+	'h131, 'h00505, 'h7AE14758, 'h00202,
 	'h130, 'h00505, 'h66666611, 'h00202,
+	'h129, 'h00505, 'h51EB851F, 'h00202,
+	'h128, 'h00505, 'h3D70A381, 'h00202,
+	'h127, 'h00505, 'h28F5C239, 'h00202,
+	'h126, 'h00505, 'h147AE148, 'h00202,
+	'h125, 'h00505, 'h00000001, 'h00202,
+	'h124, 'h20504, 'hEB851E62, 'h00202,
+	'h123, 'h20504, 'hD70A3D71, 'h00202,
+	'h122, 'h20504, 'hC28F5C29, 'h00202,
+	'h121, 'h20504, 'hAE147A8B, 'h00202,
 	'h120, 'h00707, 'h66666611, 'h00303,
 	'h110, 'h20706, 'h333332DD, 'h00303,
 	'h100, 'h00404, 'h00000001, 'h00202,
@@ -219,7 +246,7 @@ wire [31:0] cfg_param[44] =
 	 'h70, 'h00707, 'h00000001, 'h00505
 };
 
-reg   [3:0] pos  = 0;
+reg   [5:0] pos  = 0;
 reg  [15:0] mins = 0;
 reg  [15:0] secs = 0;
 reg         auto = 0;
@@ -337,7 +364,7 @@ always @(posedge CLK_50M) begin
 				pos <= pos - 1'd1;
 				auto <= 0;
 			end
-			if(ps2_key[7:0] == 'h72 && pos < 10) begin
+			if(ps2_key[7:0] == 'h72 && pos < 37) begin
 				recfg <= 1;
 				pos <= pos + 1'd1;
 				auto <= 0;
@@ -351,10 +378,14 @@ always @(posedge CLK_50M) begin
 				pos <= 0;
 				auto <= 1;
 			end
+			if(ps2_key[7:0] == 'h21) begin
+				recfg <= 1;
+				if (sdram_chip == 2) sdram_chip <= 0; else sdram_chip <= sdram_chip + 1'd1;
+			end
 		end
 	end
 
-	if(auto && (failcount && passcount) && !recfg && pos < 10) begin
+	if(auto && (failcount && passcount) && !recfg && pos < 37) begin
 		recfg <= 1;
 		pos <= pos + 1'd1;
 	end
@@ -363,6 +394,7 @@ always @(posedge CLK_50M) begin
 		recfg <= 1;
 		pos <= 0;
 		auto <= 1;
+		sdram_chip <= 0;
 	end
 end
 
@@ -388,6 +420,7 @@ tester my_memtst
 	.clk(clk_ram),
 	.rst_n(~reset),
 	.sz(sdram_sz),
+	.chip(sdram_chip),
 	.passcount(passcount),
 	.failcount(failcount),
 	.DRAM_CLK(SDRAM_CLK),
@@ -424,6 +457,7 @@ vgaout showrez
 	.clk(videoclk),
 	.rez1({sdram_sz, passcount[27:0]}),
 	.rez2(failcount),
+	.rez3((sdram_sz == 3) ? ~sdram_chip : 2'b00),
 	.bg(6'b000001),
 	.freq(16'hF000 | cfg_param[{pos, 2'd0}][11:0]),
 	.elapsed(mins),

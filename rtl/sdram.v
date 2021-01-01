@@ -51,6 +51,7 @@ module sdram
 	output reg [15:0] rdat,  // output, data last read from memory
 
 	input       [1:0] sz,
+	input       [1:0] chip,
 
 	output            DRAM_CLK,
 	output            DRAM_LDQM,DRAM_UDQM,
@@ -170,8 +171,13 @@ always @ (posedge clk) begin
 		rd    <= 0;
 		wr2   <= 0;
 		wr    <= 0;
-		addr  <= 0;
-		addr2 <= 0;
+		if (chip == 2'h2) begin
+		    addr  <= 24'h800000;
+		    addr2 <= 24'h800000;
+		end else begin
+		    addr  <= 0;
+		    addr2 <= 0;
+      end
 		st    <= 0;
 		done3 <= 0;
 		if(start) begin
@@ -220,7 +226,9 @@ always @ (posedge clk) begin
 				end
 			
 			7: begin
-					if(sz == 3 && &addr[23:0]) done3 <= 1;
+					if(chip == 0 && sz == 3 && &addr[23:0]) done3 <= 1;
+					if(chip == 1 && sz == 3 && &addr[22:0]) done3 <= 1;
+					if(chip == 2 && sz == 3 && &addr[23:0]) done3 <= 1;
 					if(sz == 2 && &addr[22:0]) done3 <= 1;
 					if(sz <= 1 && &addr[21:0]) done3 <= 1;
 					rd <= (cas_cmd == CMD_READ);

@@ -7,6 +7,7 @@ module vgaout
 
 	input [31:0] rez1,
 	input [31:0] rez2,
+	input  [1:0] rez3,
 	input  [5:0] bg,
 
 	input [15:0] freq,
@@ -52,14 +53,14 @@ wire rezpix;
 assign rn = (vcount>=VREZ2) ? r2[31:28] : (vcount>=VREZ1) ? r1[31:28] : r3[31:28];
 
 wire pix = (vcount<VREZ3) ? mpix : rezpix;
-wire [5:0] pixcolor = (vcount>=VREZ2) ? 6'b001100 : (vcount>=VREZ1) ? (!xr[5:3] ? 6'b110011 : 6'b110000) : (vcount>=VREZ3) ? 6'b111100 : 6'b110011;
+wire [5:0] pixcolor = (vcount>=VREZ2) ? 6'b001100 : (vcount>=VREZ1) ? (!xr[5:4] ? 6'b110011 : 6'b110000) : (vcount>=VREZ3) ? 6'b111100 : 6'b110011;
 
 hexnum digs
 (
-	.value(rn),
-	.x({xr[2],xr[1]|xr[0]}),
+	.value((vcount<VREZ2 && vcount>=VREZ1 && xr[5:3]==1) ? {1'b1, 2'b00, rez3} : rn),
+	.x(xr[2:0]),
 	.y({yr[3:2],yr[1]|yr[0]}),
-	.hide((vcount<VREZ1 && xr[5:3]==4) || (vcount<VREZ2 && vcount>=VREZ1 && xr[5:3]==1)),
+	.hide(vcount<VREZ1 && xr[5:3]==4),
 
 	.image(rezpix)
 );
@@ -140,71 +141,79 @@ endmodule
 
 module hexnum
 (
-	input  [3:0] value,
-	input  [1:0] x,
+	input  [4:0] value,
+	input  [2:0] x,
 	input  [2:0] y,
 	input        hide,
 
 	output image
 );
 
-reg [6:0] ss;
+reg [8:0] ss;
 reg i;
 
 always @(*) begin
-	if(hide) ss <= 7'b0000000;
-	else
-	case (value)  //gfedcba
-	4'h0: ss <= 7'b0111111;
-	4'h1: ss <= 7'b0000110;
-	4'h2: ss <= 7'b1011011;
-	4'h3: ss <= 7'b1001111;
-	4'h4: ss <= 7'b1100110;
-	4'h5: ss <= 7'b1101101;
-	4'h6: ss <= 7'b1111101;
-	4'h7: ss <= 7'b0000111;
-	4'h8: ss <= 7'b1111111;
-	4'h9: ss <= 7'b1101111;
-	4'ha: ss <= 7'b1110111;
-	4'hb: ss <= 7'b1111100;
-	4'hc: ss <= 7'b0111001;
-	4'hd: ss <= 7'b1011110;
-	4'he: ss <= 7'b1111001;
-	4'hf: ss <= 7'b1110001;
-	endcase
+	ss = 9'b000000000;
+	if(~hide) begin
+		case (value)  //gfedcba
+		'h00: ss = 9'b000111111;
+		'h01: ss = 9'b000000110;
+		'h02: ss = 9'b001011011;
+		'h03: ss = 9'b001001111;
+		'h04: ss = 9'b001100110;
+		'h05: ss = 9'b001101101;
+		'h06: ss = 9'b001111101;
+		'h07: ss = 9'b000000111;
+		'h08: ss = 9'b001111111;
+		'h09: ss = 9'b001101111;
+		'h0a: ss = 9'b001110111;
+		'h0b: ss = 9'b001111100;
+		'h0c: ss = 9'b000111001;
+		'h0d: ss = 9'b001011110;
+		'h0e: ss = 9'b001111001;
+		'h0f: ss = 9'b001110001;
+		'h10: ss = 9'b000000000;
+		'h11: ss = 9'b010000000;
+		'h12: ss = 9'b100000000;
+		'h13: ss = 9'b110000000;
+		default: ss = 9'b000000000;
+		endcase
+	end
 end
 
 always @(*) begin
 	case (y)
-	3'd0: case (x)
-				3'd0: i <= ss[0]|ss[5];
-				3'd1: i <= ss[0];
-				3'd2: i <= ss[0]|ss[1];
-				default: i <= 1'b0;
-			endcase
-	3'd1: case (x)
-				3'd0: i <= ss[5];
-				3'd2: i <= ss[1];
-				default: i <= 1'b0;
-			endcase
-	3'd2: case (x)
-				3'd0: i <= ss[5]|ss[4];//|ss[6];
-				3'd1: i <= ss[6];
-				3'd2: i <= ss[1]|ss[2];//|ss[6];
-				default: i <= 1'b0;
-			endcase
-	3'd3: case (x)
-				3'd0: i <= ss[4];
-				3'd2: i <= ss[2];
-				default: i <= 1'b0;
-			endcase
-	3'd4: case (x)
-				3'd0: i <= ss[3]|ss[4];
-				3'd1: i <= ss[3];
-				3'd2: i <= ss[3]|ss[2];
-				default: i <= 1'b0;
-			endcase
-	default: i <= 1'b0;
+	0: case (x)
+			0:       i = ss[0]|ss[5];
+			1,2,3:   i = ss[0];
+			4:       i = ss[0]|ss[1];
+			default: i = 0;
+		endcase
+	1: case (x)
+			0:       i = ss[5];
+			2:       i = ss[7];
+			4:       i = ss[1];
+			default: i = 0;
+		endcase
+	2: case (x)
+			0:       i = ss[5]|ss[4];//|ss[6];
+			1,2,3:   i = ss[6];
+			4:       i = ss[1]|ss[2];//|ss[6];
+			default: i = 0;
+		endcase
+	3: case (x)
+			0:       i = ss[4];
+			2:       i = ss[8];
+			4:       i = ss[2];
+			default: i = 0;
+		endcase
+	4: case (x)
+			0:       i = ss[3]|ss[4];
+			1,2,3:   i = ss[3];
+			4:       i = ss[3]|ss[2];
+			default: i = 0;
+		endcase
+	default:       i = 0;
 	endcase
 end
 

@@ -19,6 +19,7 @@
 * Up - increase frequency
 * Down - decrease frequency
 * Enter - reset the test
+* C - on 128MB module switches between chips.
 * A - auto mode, detecting the maximum frequency for module being tested. Test starts from maximum frequency.
 With every error frequency will be decreased.
 

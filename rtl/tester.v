@@ -12,6 +12,7 @@ module tester
 	input         rst_n,
 
 	input  [1:0]  sz,
+	input  [1:0]  chip,
 
 	output reg [31:0] passcount,
 	output reg [31:0] failcount,
@@ -51,6 +52,7 @@ sdram my_dram
 	.rst_n(sdram_rst_n),
 	.clk(clk),
 	.sz(sz),
+	.chip(chip),
 	.start(dram_start),
 	.rnw(dram_rnw),
 	.done(dram_done),
