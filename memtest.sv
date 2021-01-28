@@ -154,10 +154,14 @@ wire  [1:0] buttons;
 localparam CONF_STR = 
 {
 	"MEMTEST;;",
+	"J1, Reset Freq, Reset Test, Switch IC;",
+    "jn, A, Start, B;",
+    "jp, B, Start, A;",
 	"V,v",`BUILD_DATE
 };
 
 reg  [10:0] ps2_key;
+wire [15:0] joystick_0;
 wire  [1:0] sdram_sz;
 reg   [1:0] sdram_chip = 2'h0;
 
@@ -171,6 +175,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.buttons(buttons),
 	.sdram_sz(sdram_sz),
 
+	.joystick_0(joystick_0),
 	.ps2_key(ps2_key),
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0)
@@ -258,6 +263,7 @@ always @(posedge CLK_50M) begin
 	reg  [7:0] state = 0;
 	integer    min = 0, sec = 0;
 	reg        old_stb = 0;
+	reg [15:0] old_joy = 0;
 
 	mgmt_write <= 0;
 
@@ -359,29 +365,30 @@ always @(posedge CLK_50M) begin
 	end
 
 	old_stb <= ps2_key[10];
-	if(old_stb != ps2_key[10]) begin
+	old_joy <= joystick_0;
+	if(old_stb != ps2_key[10] || old_joy != joystick_0) begin
 		state <= 0;
-		if(ps2_key[9]) begin
-			if(ps2_key[7:0] == 'h75 && pos > 0) begin
+		if(ps2_key[9] || joystick_0) begin
+			if((ps2_key[7:0] == 'h75 || (~old_joy[3] && joystick_0[3])) && pos > 0) begin
 				recfg <= 1;
 				pos <= pos - 1'd1;
 				auto <= 0;
 			end
-			if(ps2_key[7:0] == 'h72 && pos < 37) begin
+			if((ps2_key[7:0] == 'h72 || (~old_joy[2] && joystick_0[2]))  && pos < 37) begin
 				recfg <= 1;
 				pos <= pos + 1'd1;
 				auto <= 0;
 			end
-			if(ps2_key[7:0] == 'h5a) begin
+			if(ps2_key[7:0] == 'h5a || (~old_joy[4] && joystick_0[4])) begin
 				recfg <= 1;
 				auto <= 0;
 			end
-			if(ps2_key[7:0] == 'h1c) begin
+			if(ps2_key[7:0] == 'h1c || (~old_joy[5] && joystick_0[5])) begin
 				recfg <= 1;
 				pos <= 0;
 				auto <= 1;
 			end
-			if(ps2_key[7:0] == 'h21) begin
+			if(ps2_key[7:0] == 'h21 || (~old_joy[6] && joystick_0[6])) begin
 				recfg <= 1;
 				if (sdram_chip == 2) sdram_chip <= 0; else sdram_chip <= sdram_chip + 1'd1;
 			end
