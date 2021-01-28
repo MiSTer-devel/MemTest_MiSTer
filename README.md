@@ -23,5 +23,13 @@
 * A - auto mode, detecting the maximum frequency for module being tested. Test starts from maximum frequency.
 With every error frequency will be decreased.
 
+## Controls (gamepad)
+* Up - increase frequency
+* Down - decrease frequency
+* Start - reset the test
+* B - on 128MB module switches between chips.
+* A - auto mode, detecting the maximum frequency for module being tested. Test starts from maximum frequency.
+With every error frequency will be decreased.
+
 Test is passed if amount of errors is 0. For quick test let it run for 10 minutes in auto mode. If you want to be sure, let it run for 1-2 hours.
 Board should pass at least 130 MHz clock test. Any higher clock will assure the higher quality of the board.
