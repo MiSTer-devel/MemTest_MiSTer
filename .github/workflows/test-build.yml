@@ -8,7 +8,7 @@ name: Test Build
 on:
   push:
     branches:
-      - main
+      - master
     paths-ignore:
       - '**.md'
   pull_request:
@@ -20,7 +20,7 @@ on:
 jobs:
   synthesis:
     runs-on: ubuntu-latest
-    container: raetro/quartus:17.1
+    container: raetro/quartus:17.0
     ############################################################################
     steps:
       ##########################################################################
@@ -32,12 +32,12 @@ jobs:
       # 2 - RTL synthesis
       ##########################################################################
       - name: Run compilation flow
-        run: quartus_sh --flow compile my_project.qpf
+        run: quartus_sh --flow compile memtest.qpf
       ##########################################################################
       # 3 - Upload artifacts
       ##########################################################################
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: OutputFiles
-          path: output_files/
+          name: memtest_${{ steps.version.outputs.version }}
+          path: release/
