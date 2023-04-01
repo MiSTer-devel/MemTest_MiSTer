@@ -186,18 +186,25 @@ assign AUDIO_L = 0;
 assign AUDIO_R = 0;
 assign AUDIO_MIX = 0;
 
-assign LED_DISK  = 0;
+//assign LED_DISK  = 0;
 assign LED_POWER = 0;
-assign LED_USER  = 0;
+//assign LED_USER  = 0;
 assign BUTTONS   = 0;
 
 wire [31:0] status;
 wire  [1:0] buttons;
 
 `include "build_id.v" 
+
+// Status Bit Map:
+// 0         1         2         3 
+// 01234567890123456789012345678901
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV
+// XX
 localparam CONF_STR = 
 {
 	"MEMTEST;;",
+	"O1, Auto Pass Time, 5 min, 10 min;",
 	"J1, Reset Freq, Reset Test, Switch IC;",
     "jn, A, Start, B;",
     "jp, B, Start, A;",
@@ -208,6 +215,7 @@ reg  [10:0] ps2_key;
 wire [15:0] joystick_0;
 wire  [1:0] sdram_sz;
 reg   [1:0] sdram_chip = 2'h0;
+reg  [31:0] count;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
@@ -302,6 +310,32 @@ reg   [5:0] pos  = 0;
 reg  [15:0] mins = 0;
 reg  [15:0] secs = 0;
 reg         auto = 0;
+reg   [3:0] timer = 0;
+
+always @(posedge CLK_50M) begin
+	if (status[0])
+		timer <= 10;
+	else
+		timer <= 5;
+	if(mins < timer) begin
+        count <= count + 1;
+        if (count == 4999999) begin
+            count <= 0;
+            if (pos < 23 && failcount == 0) begin
+                LED_USER <= ~LED_USER;
+				LED_DISK <= 0;
+            end else begin
+                LED_USER <= 0;
+                LED_DISK <= 1;
+            end
+        end
+    end else begin
+        if(pos < 23 && failcount == 0) begin
+            LED_USER <= 1;
+            LED_DISK <= 0;
+        end
+    end
+end
 
 always @(posedge CLK_50M) begin
 	reg  [7:0] state = 0;
