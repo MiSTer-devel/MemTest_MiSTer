@@ -242,12 +242,10 @@ pll pll
 	.*,
 	.refclk(CLK_50M),
 	.rst(pll_reset | RESET),
-	.outclk_0(clk_ram),
-	.outclk_1(clk50m)
+	.outclk_0(clk_ram)
 );
 
 wire        mgmt_waitrequest;
-wire 		clk50m;
 reg         mgmt_write;
 reg  [5:0]  mgmt_address;
 reg  [31:0] mgmt_writedata;
@@ -314,7 +312,7 @@ reg  [15:0] secs = 0;
 reg         auto = 0;
 reg   [3:0] timer = 0;
 
-always @(posedge clk50m) begin
+always @(posedge CLK_50M) begin
 	if (status[0])
 		timer <= 10;
 	else
