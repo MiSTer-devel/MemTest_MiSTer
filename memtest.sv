@@ -256,7 +256,7 @@ pll_cfg pll_cfg
 reg recfg = 0;
 reg pll_reset = 0;
 
-wire [31:0] cfg_param[204] =
+wire [31:0] cfg_param[256] =
 '{ //      M         K          C
 	'h167, 'h00808, 'hB33332DD, 'h20302,
 	'h160, 'h00808, 'h00000001, 'h20302,
@@ -296,8 +296,21 @@ wire [31:0] cfg_param[204] =
 	 'h90, 'h00707, 'h66666666, 'h00404,
 	 'h80, 'h00707, 'h66666666, 'h20504,
 	 'h70, 'h00707, 'h00000001, 'h00505,
+	 'h69, 'h00404, 'h47AE147B, 'h00303,
+	 'h68, 'h00404, 'h28F5C28F, 'h00303,
+	 'h67, 'h00505, 'hB851EB85, 'h00404,
+	 'h66, 'h00505, 'h8F5C28F6, 'h00404,
 	 'h65, 'h20706, 'h00000001, 'h00505,
+	 'h64, 'h00606, 'hCCCCCCCD, 'h00505,
+	 'h63, 'h00606, 'h9999999A, 'h00505,
+	'h625, 'h00505, 'h00000001, 'h00404,
+	 'h62, 'h00606, 'h66666666, 'h00505,
+	 'h61, 'h00606, 'h33333333, 'h00505,
 	 'h60, 'h00606, 'h00000001, 'h00505,
+	 'h59, 'h20504, 'h70A3D70A, 'h00404,
+	 'h58, 'h20504, 'h47AE147B, 'h00404,
+	 'h57, 'h20504, 'h1EB851EC, 'h00404,
+	 'h56, 'h00303, 'hB851EB85, 'h00303,
 	 'h55, 'h20605, 'h00000001, 'h00505,
 	 'h54, 'h00505, 'hCCCCCCCD, 'h00505,
 	 'h53, 'h00505, 'h9999999A, 'h00505,
@@ -431,7 +444,7 @@ always @(posedge CLK_50M) begin
 				pos <= pos - 1'd1;
 				auto <= 0;
 			end
-			if((ps2_key[7:0] == 'h72 || (~old_joy[2] && joystick_0[2]))  && pos < 50) begin
+			if((ps2_key[7:0] == 'h72 || (~old_joy[2] && joystick_0[2]))  && pos < 63) begin
 				recfg <= 1;
 				pos <= pos + 1'd1;
 				auto <= 0;
@@ -452,7 +465,7 @@ always @(posedge CLK_50M) begin
 		end
 	end
 
-	if(auto && (failcount && passcount) && !recfg && pos < 50) begin
+	if(auto && (failcount && passcount) && !recfg && pos < 63) begin
 		recfg <= 1;
 		pos <= pos + 1'd1;
 	end
