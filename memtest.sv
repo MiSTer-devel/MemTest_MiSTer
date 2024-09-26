@@ -256,7 +256,7 @@ pll_cfg pll_cfg
 reg recfg = 0;
 reg pll_reset = 0;
 
-wire [31:0] cfg_param[152] =
+wire [31:0] cfg_param[204] =
 '{ //      M         K          C
 	'h167, 'h00808, 'hB33332DD, 'h20302,
 	'h160, 'h00808, 'h00000001, 'h20302,
@@ -295,7 +295,20 @@ wire [31:0] cfg_param[152] =
 	'h100, 'h00404, 'h00000001, 'h00202,
 	 'h90, 'h00707, 'h66666666, 'h00404,
 	 'h80, 'h00707, 'h66666666, 'h20504,
-	 'h70, 'h00707, 'h00000001, 'h00505
+	 'h70, 'h00707, 'h00000001, 'h00505,
+	 'h65, 'h20706, 'h00000001, 'h00505,
+	 'h60, 'h00606, 'h00000001, 'h00505,
+	 'h55, 'h20605, 'h00000001, 'h00505,
+	 'h54, 'h00505, 'hCCCCCCCD, 'h00505,
+	 'h53, 'h00505, 'h9999999A, 'h00505,
+	 'h52, 'h00505, 'h66666666, 'h00505,
+	 'h51, 'h00505, 'h33333333, 'h00505,
+	 'h50, 'h00505, 'h00000001, 'h00505,
+	 'h49, 'h20504, 'hCCCCCCCD, 'h00505,
+	 'h48, 'h20504, 'h9999999A, 'h00505,
+	 'h47, 'h20504, 'h66666666, 'h00505,
+	 'h46, 'h20504, 'h33333333, 'h00505,
+	 'h45, 'h20504, 'h00000001, 'h00505
 };
 
 reg   [5:0] pos  = 0;
@@ -339,7 +352,7 @@ always @(posedge CLK_50M) begin
 				// N
 				3: begin
 						mgmt_address   <= 3;
-						mgmt_writedata <= 'h10000;
+						mgmt_writedata <= 'h10000; //N-counter is bypassed. Always 1?
 						mgmt_write     <= 1;
 					end
 
@@ -418,7 +431,7 @@ always @(posedge CLK_50M) begin
 				pos <= pos - 1'd1;
 				auto <= 0;
 			end
-			if((ps2_key[7:0] == 'h72 || (~old_joy[2] && joystick_0[2]))  && pos < 37) begin
+			if((ps2_key[7:0] == 'h72 || (~old_joy[2] && joystick_0[2]))  && pos < 50) begin
 				recfg <= 1;
 				pos <= pos + 1'd1;
 				auto <= 0;
@@ -439,7 +452,7 @@ always @(posedge CLK_50M) begin
 		end
 	end
 
-	if(auto && (failcount && passcount) && !recfg && pos < 37) begin
+	if(auto && (failcount && passcount) && !recfg && pos < 50) begin
 		recfg <= 1;
 		pos <= pos + 1'd1;
 	end
