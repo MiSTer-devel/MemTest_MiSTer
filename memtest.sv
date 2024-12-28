@@ -256,7 +256,7 @@ pll_cfg pll_cfg
 reg recfg = 0;
 reg pll_reset = 0;
 
-wire [31:0] cfg_param[152] =
+wire [31:0] cfg_param[256] =
 '{ //      M         K          C
 	'h167, 'h00808, 'hB33332DD, 'h20302,
 	'h160, 'h00808, 'h00000001, 'h20302,
@@ -295,7 +295,33 @@ wire [31:0] cfg_param[152] =
 	'h100, 'h00404, 'h00000001, 'h00202,
 	 'h90, 'h00707, 'h66666666, 'h00404,
 	 'h80, 'h00707, 'h66666666, 'h20504,
-	 'h70, 'h00707, 'h00000001, 'h00505
+	 'h70, 'h00707, 'h00000001, 'h00505,
+	 'h69, 'h00404, 'h47AE147B, 'h00303,
+	 'h68, 'h00404, 'h28F5C28F, 'h00303,
+	 'h67, 'h00505, 'hB851EB85, 'h00404,
+	 'h66, 'h00505, 'h8F5C28F6, 'h00404,
+	 'h65, 'h20706, 'h00000001, 'h00505,
+	 'h64, 'h00606, 'hCCCCCCCD, 'h00505,
+	 'h63, 'h00606, 'h9999999A, 'h00505,
+	'h625, 'h00404, 'hC0000000, 'h20403,
+	 'h62, 'h00606, 'h66666666, 'h00505,
+	 'h61, 'h00606, 'h33333333, 'h00505,
+	 'h60, 'h00404, 'h66666611, 'h20403,
+	 'h59, 'h00404, 'h428F5C29, 'h20403,
+	 'h58, 'h00404, 'h1EB851EC, 'h20403,
+	 'h57, 'h20504, 'h1EB851EC, 'h00404,
+	 'h56, 'h00505, 'h147AE148, 'h20504,
+	 'h55, 'h00404, 'hCCCCCCCD, 'h00404,
+	 'h54, 'h00404, 'hA3D709E8, 'h00404,
+	 'h53, 'h00404, 'h7AE14758, 'h00404,
+	 'h52, 'h00404, 'h51EB851F, 'h00404,
+	 'h51, 'h00404, 'h28F5C239, 'h00404,
+	 'h50, 'h00404, 'h00000001, 'h00404,
+	 'h49, 'h00404, 'hD1EB851F, 'h20504,
+	 'h48, 'h00404, 'hA3D709E8, 'h20504,
+	 'h47, 'h00404, 'h75C28F06, 'h20504,
+	 'h46, 'h00404, 'h47AE147B, 'h20504,
+	 'h45, 'h00404, 'h1999999A, 'h20504
 };
 
 reg   [5:0] pos  = 0;
@@ -339,7 +365,7 @@ always @(posedge CLK_50M) begin
 				// N
 				3: begin
 						mgmt_address   <= 3;
-						mgmt_writedata <= 'h10000;
+						mgmt_writedata <= 'h10000; //N-counter is bypassed
 						mgmt_write     <= 1;
 					end
 
@@ -418,7 +444,7 @@ always @(posedge CLK_50M) begin
 				pos <= pos - 1'd1;
 				auto <= 0;
 			end
-			if((ps2_key[7:0] == 'h72 || (~old_joy[2] && joystick_0[2]))  && pos < 37) begin
+			if((ps2_key[7:0] == 'h72 || (~old_joy[2] && joystick_0[2]))  && pos < 63) begin
 				recfg <= 1;
 				pos <= pos + 1'd1;
 				auto <= 0;
@@ -439,7 +465,7 @@ always @(posedge CLK_50M) begin
 		end
 	end
 
-	if(auto && (failcount && passcount) && !recfg && pos < 37) begin
+	if(auto && (failcount && passcount) && !recfg && pos < 63) begin
 		recfg <= 1;
 		pos <= pos + 1'd1;
 	end
