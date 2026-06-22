@@ -69,8 +69,12 @@ wire mpix = ({xr[2],xr[1]|xr[0]} <= 2) && ((vcount>>3) == (VREZ4>>3)) && r4[7];
 
 always @(posedge clk) begin
 
-	if (hcount==HMAX) hcount <= 9'd0;
-		else hcount <= hcount + 9'd1;
+   reg ce_d;
+	ce_d <= ~ce_d;
+	if(ce_d) begin
+	
+	if (hcount==HMAX) hcount <= 12'd0;
+		else hcount <= hcount + 12'd1;
 
 	if (hcount==HSCRN_END) begin
 		hscr <= 1'b0;
@@ -109,10 +113,10 @@ always @(posedge clk) begin
 	end
 
 	if (nextline) begin
-		if (vcount==VMAX)
-			vcount <= 9'd0;
+		if (vcount >= 12'd524)
+			vcount <= 12'd0;
 		else
-			vcount <= vcount + 9'd1;
+			vcount <= vcount + 12'd2;
 
 		if (vcount==VSCRN_END)
 			vscr <= 1'b0;
@@ -133,6 +137,7 @@ always @(posedge clk) begin
 
 	{g,r,b} <= pix ? pixcolor : (hscr&vscr) ? bg : 6'b000000;
 
+	end
 end
 
 endmodule

@@ -527,8 +527,11 @@ vpll vpll
 	.outclk_0(videoclk)
 );
 
+reg ce;
+always @(posedge videoclk) ce <= ~ce;
+
 assign CLK_VIDEO = videoclk;
-assign CE_PIXEL  = 1;
+assign CE_PIXEL  = ce;
 
 wire hs, vs;
 wire [1:0] b, r, g;
@@ -550,7 +553,7 @@ vgaout showrez
 	.g(g)
 );
 
-assign VGA_HS = ~hs;
+assign VGA_HS = hs;
 assign VGA_VS = ~vs;
 
 assign VGA_B  = {4{b}};
